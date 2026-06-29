@@ -7,15 +7,22 @@
  * Cross-platform: Windows (uses Dokan via fsxfsmount.exe) and
  *                 Linux  (uses FUSE  via fsxfsmount).
  *
- * POSIX usage: xfs_extract <xfs_image> <output_dir> [-v]
- *              [-l log_file] [-t temp_folder] [-m path_to_fsxfsmount]
+ * Windows usage: xfs_extract <xfs_image> <output_dir> [-v]
+ *                [-t temp_folder] [-m path_to_fsxfsmount.exe]
+ *
+ * POSIX usage:   xfs_extract <xfs_image> <output_dir> [-v]
+ *                [-l log_file] [-t temp_folder] [-m path_to_fsxfsmount]
  *
  * Options:
- *   -v             Enable verbose logging to log.txt (next to the executable)
- *   -h, --help     Show this help message
+ *   -v                     Enable verbose logging
+ *   -h, --help             Show this help message
+ *   -t, --temp-folder PATH Override temporary mount base folder
+ *   -m, --mount PATH       Path to fsxfsmount(.exe)
  *
  * If fsxfsmount(.exe) is not specified it is looked up next to xfs_extract,
  * then on $PATH (POSIX only).
+ * Temp dir priority: -t arg → %TMPDIR% → GetTempPathW() (Windows)
+ *                    -t arg → $TMPDIR  → /tmp           (POSIX)
  */
 
 /* ======================================================================
@@ -115,6 +122,8 @@ static int xfs_extract_copy_directory(
 
     if( xfs_extract_ensure_directory( dst_dir ) != 0 )
     {
+        xfs_extract_log( L"Error: unable to prepare destination directory %s (%u)",
+                         dst_dir, GetLastError() );
         return( -1 );
     }
     _snwprintf( search_path, MAX_PATH, L"%s\\*", src_dir );
@@ -144,6 +153,8 @@ static int xfs_extract_copy_directory(
         {
             if( !CopyFileW( src_path, dst_path, FALSE ) )
             {
+                xfs_extract_log( L"Error: CopyFile failed %s -> %s (%u)",
+                                 src_path, dst_path, GetLastError() );
                 result = -1;
             }
         }
@@ -190,7 +201,101 @@ static void xfs_extract_remove_directory(
     RemoveDirectoryW( path );
 }
 
+static int xfs_extract_file_exists_w(
+    const wchar_t *path )
+{
+    DWORD attrs = GetFileAttributesW( path );
+    return( attrs != INVALID_FILE_ATTRIBUTES
+         && !( attrs & FILE_ATTRIBUTE_DIRECTORY ) );
+}
+
+static DWORD xfs_extract_dir_volume_serial(
+    const wchar_t *path )
+{
+    HANDLE                   h;
+    BY_HANDLE_FILE_INFORMATION info;
+    DWORD                    serial = 0;
+
+    h = CreateFileW( path, 0,
+                     FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                     NULL, OPEN_EXISTING,
+                     FILE_FLAG_BACKUP_SEMANTICS, NULL );
+    if( h == INVALID_HANDLE_VALUE )
+    {
+        return( 0 );
+    }
+    if( GetFileInformationByHandle( h, &info ) )
+    {
+        serial = info.dwVolumeSerialNumber;
+    }
+    CloseHandle( h );
+    return( serial );
+}
+
+enum
+{
+    XFS_EXTRACT_WAIT_FOR_MOUNT_SUCCESS = 0,
+    XFS_EXTRACT_WAIT_FOR_MOUNT_TIMEOUT = 1,
+    XFS_EXTRACT_WAIT_FOR_MOUNT_EXITED  = 2,
+    XFS_EXTRACT_WAIT_FOR_MOUNT_ERROR   = 3
+};
+
+static int xfs_extract_wait_for_mount_w(
+    const wchar_t *mount_point,
+    HANDLE         hProcess,
+    int            timeout_seconds,
+    DWORD         *exit_code_out )
+{
+    wchar_t parent[ MAX_PATH ];
+    DWORD   parent_serial;
+    int     i;
+
+    _snwprintf( parent, MAX_PATH, L"%s\\..", mount_point );
+    parent_serial = xfs_extract_dir_volume_serial( parent );
+    if( parent_serial == 0 )
+    {
+        return( XFS_EXTRACT_WAIT_FOR_MOUNT_ERROR );
+    }
+    for( i = 0; i < timeout_seconds * 10; i++ )
+    {
+        if( WaitForSingleObject( hProcess, 0 ) == WAIT_OBJECT_0 )
+        {
+            if( exit_code_out != NULL )
+            {
+                GetExitCodeProcess( hProcess, exit_code_out );
+            }
+            return( XFS_EXTRACT_WAIT_FOR_MOUNT_EXITED );
+        }
+        if( xfs_extract_dir_volume_serial( mount_point ) != parent_serial )
+        {
+            return( XFS_EXTRACT_WAIT_FOR_MOUNT_SUCCESS );
+        }
+        Sleep( 100 );
+    }
+    return( XFS_EXTRACT_WAIT_FOR_MOUNT_TIMEOUT );
+}
+
 /* ------------------------------ Entry point -------------------------- */
+
+static void xfs_extract_usage_w(
+    FILE *stream )
+{
+    fwprintf( stream,
+        L"Usage: xfs_extract <xfs_image> <output_dir> [-v] [-t temp_folder]"
+        L" [-m path_to_fsxfsmount.exe]\n"
+        L"\n"
+        L"Options:\n"
+        L"  -v                       Enable verbose logging to log.txt\n"
+        L"  -h, --help               Show this help\n"
+        L"  -t, --temp-folder PATH   Override the temporary mount base folder\n"
+        L"  -m, --mount PATH         Use the specified fsxfsmount.exe\n"
+        L"\n"
+        L"Mounts the XFS image via fsxfsmount.exe (Dokan), copies all\n"
+        L"content to output_dir, then unmounts and cleans up.\n"
+        L"Temp dir priority: -t arg then %%TMPDIR%% then system temp.\n"
+        L"If fsxfsmount.exe is not specified it is looked up next to\n"
+        L"xfs_extract.exe.\n" );
+}
 
 int wmain(
     int argc,
@@ -198,67 +303,103 @@ int wmain(
 {
     wchar_t             mount_exe[ MAX_PATH ];
     wchar_t             mount_point[ MAX_PATH ];
-    wchar_t             temp_dir[ MAX_PATH ];
+    wchar_t             tmp_clean[ MAX_PATH ];
+    wchar_t             env_tmpdir[ MAX_PATH ];
+    wchar_t             sys_temp[ MAX_PATH ];
     wchar_t             cmdline[ 32768 ];
     STARTUPINFOW        si;
     PROCESS_INFORMATION pi;
-    int                 result    = 0;
-    int                 verbose   = 0;
-    int                 first_pos = 1;
+    const wchar_t      *explicit_mount = NULL;
+    const wchar_t      *temp_base      = NULL;
+    int                 mount_wait     = XFS_EXTRACT_WAIT_FOR_MOUNT_ERROR;
+    DWORD               exit_code      = 0;
+    int                 result         = 0;
+    int                 verbose        = 0;
 
-    for( ; first_pos < argc; first_pos++ )
+    if( argc == 2
+     && ( wcscmp( argv[ 1 ], L"-h" ) == 0
+       || wcscmp( argv[ 1 ], L"--help" ) == 0 ) )
     {
-        if( wcscmp( argv[ first_pos ], L"-v" ) == 0 )
-        {
-            verbose = 1;
-        }
-        else if( wcscmp( argv[ first_pos ], L"-h" ) == 0
-              || wcscmp( argv[ first_pos ], L"--help" ) == 0 )
-        {
-            wprintf(
-                L"Usage: xfs_extract [-v] <xfs_image> <output_dir>"
-                L" [path_to_fsxfsmount.exe]\n"
-                L"\n"
-                L"Options:\n"
-                L"  -v             Enable verbose logging to log.txt\n"
-                L"  -h, --help     Show this help\n"
-                L"\n"
-                L"Mounts the XFS image via fsxfsmount.exe (Dokan), copies all\n"
-                L"content to output_dir, then unmounts and cleans up.\n"
-                L"If fsxfsmount.exe is not specified it is looked up next to\n"
-                L"xfs_extract.exe.\n" );
-            return( 0 );
-        }
-        else
-        {
-            break;
-        }
+        xfs_extract_usage_w( stdout );
+        return( 0 );
     }
-
-    int       pos_argc = argc - first_pos;
-    wchar_t **pos_argv = argv + first_pos;
-
-    if( pos_argc < 2 )
+    if( argc < 3 )
     {
         fwprintf( stderr,
                   L"Error: insufficient arguments.\n"
                   L"Run with -h for help.\n" );
         return( 1 );
     }
-    const wchar_t *xfs_image  = pos_argv[ 0 ];
-    const wchar_t *output_dir = pos_argv[ 1 ];
 
-    if( verbose )
+    const wchar_t *xfs_image  = argv[ 1 ];
+    const wchar_t *output_dir = argv[ 2 ];
+
+    for( int argument_index = 3; argument_index < argc; argument_index++ )
+    {
+        if( wcscmp( argv[ argument_index ], L"-v" ) == 0 )
+        {
+            verbose = 1;
+        }
+        else if( wcscmp( argv[ argument_index ], L"-h" ) == 0
+              || wcscmp( argv[ argument_index ], L"--help" ) == 0 )
+        {
+            xfs_extract_usage_w( stdout );
+            return( 0 );
+        }
+        else if( wcscmp( argv[ argument_index ], L"-t" ) == 0
+              || wcscmp( argv[ argument_index ], L"--temp-folder" ) == 0 )
+        {
+            const wchar_t *option_name = argv[ argument_index ];
+            argument_index++;
+            if( argument_index >= argc )
+            {
+                fwprintf( stderr, L"Error: missing value for %s.\n", option_name );
+                return( 1 );
+            }
+            temp_base = argv[ argument_index ];
+        }
+        else if( wcscmp( argv[ argument_index ], L"-m" ) == 0
+              || wcscmp( argv[ argument_index ], L"--mount" ) == 0 )
+        {
+            const wchar_t *option_name = argv[ argument_index ];
+            argument_index++;
+            if( argument_index >= argc )
+            {
+                fwprintf( stderr, L"Error: missing value for %s.\n", option_name );
+                return( 1 );
+            }
+            explicit_mount = argv[ argument_index ];
+        }
+        else if( explicit_mount == NULL )
+        {
+            explicit_mount = argv[ argument_index ];
+        }
+        else
+        {
+            fwprintf( stderr, L"Error: invalid argument: %s\n", argv[ argument_index ] );
+            return( 1 );
+        }
+    }
+
+    if( verbose != 0 )
     {
         xfs_extract_log_open();
     }
     xfs_extract_log( L"Image : %s", xfs_image );
     xfs_extract_log( L"Output: %s", output_dir );
 
-    /* Resolve fsxfsmount.exe path. */
-    if( pos_argc >= 3 )
+    if( !xfs_extract_file_exists_w( xfs_image ) )
     {
-        _snwprintf( mount_exe, MAX_PATH, L"%s", pos_argv[ 2 ] );
+        fwprintf( stderr, L"Error: image not found: %s\n", xfs_image );
+        xfs_extract_log( L"Error: image not found" );
+        xfs_extract_log_close();
+        return( 1 );
+    }
+
+    /* Resolve fsxfsmount.exe path. */
+    if( explicit_mount != NULL && explicit_mount[ 0 ] != L'\0' )
+    {
+        _snwprintf( mount_exe, MAX_PATH, L"%s", explicit_mount );
     }
     else
     {
@@ -279,15 +420,53 @@ int wmain(
     }
     xfs_extract_log( L"fsxfsmount: %s", mount_exe );
 
-    /* Create a unique temporary mount point. */
-    if( GetTempPathW( MAX_PATH, temp_dir ) == 0 )
+    if( GetFileAttributesW( mount_exe ) == INVALID_FILE_ATTRIBUTES )
     {
-        xfs_extract_log( L"Error: GetTempPath failed (%u)", GetLastError() );
+        fwprintf( stderr, L"Error: fsxfsmount not found: %s\n", mount_exe );
+        xfs_extract_log( L"Error: fsxfsmount not found: %s", mount_exe );
         xfs_extract_log_close();
         return( 1 );
     }
-    _snwprintf( mount_point, MAX_PATH, L"%sfsxfs_mount_%u_%u",
-                temp_dir, GetCurrentProcessId(), GetTickCount() );
+
+    /* Resolve temp base directory: -t arg → %TMPDIR% → GetTempPathW(). */
+    const wchar_t *tmp = temp_base;
+    if( tmp == NULL || tmp[ 0 ] == L'\0' )
+    {
+        DWORD r = GetEnvironmentVariableW( L"TMPDIR", env_tmpdir, MAX_PATH );
+        if( r > 0 && r < MAX_PATH )
+        {
+            tmp = env_tmpdir;
+        }
+    }
+    if( tmp == NULL || tmp[ 0 ] == L'\0' )
+    {
+        if( GetTempPathW( MAX_PATH, sys_temp ) > 0 )
+        {
+            tmp = sys_temp;
+        }
+    }
+    if( tmp == NULL || tmp[ 0 ] == L'\0' )
+    {
+        fwprintf( stderr, L"Error: cannot determine temp directory\n" );
+        xfs_extract_log( L"Error: temp dir resolution failed" );
+        xfs_extract_log_close();
+        return( 1 );
+    }
+    xfs_extract_log( L"Temp base: %s", tmp );
+
+    /* Strip trailing separator for consistent path building. */
+    _snwprintf( tmp_clean, MAX_PATH, L"%s", tmp );
+    size_t tmp_len = wcslen( tmp_clean );
+    while( tmp_len > 1
+        && ( tmp_clean[ tmp_len - 1 ] == L'\\'
+          || tmp_clean[ tmp_len - 1 ] == L'/' ) )
+    {
+        tmp_clean[ --tmp_len ] = L'\0';
+    }
+
+    /* Create a unique temporary mount point. */
+    _snwprintf( mount_point, MAX_PATH, L"%s\\fsxfs_mount_%u_%u",
+                tmp_clean, GetCurrentProcessId(), GetTickCount() );
 
     if( !CreateDirectoryW( mount_point, NULL ) )
     {
@@ -297,6 +476,17 @@ int wmain(
         return( 1 );
     }
     xfs_extract_log( L"Mount point: %s", mount_point );
+
+    if( xfs_extract_ensure_directory( output_dir ) != 0 )
+    {
+        fwprintf( stderr, L"Error: cannot create output dir %s (%u)\n",
+                  output_dir, GetLastError() );
+        xfs_extract_log( L"Error: cannot create output dir %s (%u)",
+                         output_dir, GetLastError() );
+        xfs_extract_remove_directory( mount_point );
+        xfs_extract_log_close();
+        return( 1 );
+    }
 
     /* Launch fsxfsmount in the background. */
     _snwprintf( cmdline, 32768, L"\"%s\" \"%s\" \"%s\"",
@@ -321,24 +511,52 @@ int wmain(
         return( 1 );
     }
     CloseHandle( pi.hThread );
-    xfs_extract_log( L"Mounted (PID %u) - waiting for filesystem to become ready...",
+    xfs_extract_log( L"Launched (PID %u) - waiting for filesystem to become ready...",
                      pi.dwProcessId );
 
-    Sleep( 2000 );
+    mount_wait = xfs_extract_wait_for_mount_w( mount_point, pi.hProcess, 10, &exit_code );
+
+    if( mount_wait != XFS_EXTRACT_WAIT_FOR_MOUNT_SUCCESS )
+    {
+        if( mount_wait == XFS_EXTRACT_WAIT_FOR_MOUNT_EXITED )
+        {
+            fwprintf( stderr,
+                      L"Error: fsxfsmount exited with code %u before filesystem became ready\n",
+                      exit_code );
+            xfs_extract_log( L"Error: fsxfsmount exited with code %u before mount was ready",
+                             exit_code );
+        }
+        else if( mount_wait == XFS_EXTRACT_WAIT_FOR_MOUNT_TIMEOUT )
+        {
+            fwprintf( stderr, L"Error: filesystem did not become ready within 10s\n" );
+            xfs_extract_log( L"Error: mount not ready" );
+            TerminateProcess( pi.hProcess, 0 );
+            WaitForSingleObject( pi.hProcess, 5000 );
+        }
+        else
+        {
+            fwprintf( stderr, L"Error: unable to monitor mount startup\n" );
+            xfs_extract_log( L"Error: unable to monitor mount startup" );
+            TerminateProcess( pi.hProcess, 0 );
+            WaitForSingleObject( pi.hProcess, 5000 );
+        }
+        CloseHandle( pi.hProcess );
+        xfs_extract_remove_directory( mount_point );
+        xfs_extract_log_close();
+        return( 1 );
+    }
 
     /* Copy. */
     xfs_extract_log( L"Copying files..." );
     result = xfs_extract_copy_directory( mount_point, output_dir );
     xfs_extract_log( L"Copy %s", result == 0 ? L"complete" : L"completed with warnings" );
 
-    Sleep( 200000000 );
     /* Unmount. */
     xfs_extract_log( L"Unmounting (PID %u)...", pi.dwProcessId );
     TerminateProcess( pi.hProcess, 0 );
     WaitForSingleObject( pi.hProcess, 5000 );
     CloseHandle( pi.hProcess );
-
-    Sleep( 2000000000 );
+    Sleep( 2000 );
 
     xfs_extract_remove_directory( mount_point );
     xfs_extract_log( L"Done (exit code 0)" );
