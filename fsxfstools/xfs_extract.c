@@ -60,7 +60,7 @@ static void xfs_extract_log_open(
         *( last_slash + 1 ) = L'\0';
     }
     wcsncat( log_path, L"log.txt", MAX_PATH - (DWORD) wcslen( log_path ) - 1 );
-    _wfopen_s( &g_log, log_path, L"a" );
+    g_log = _wfsopen(log_path, L"a", _SH_DENYWR);
 }
 
 static void xfs_extract_log_close(
