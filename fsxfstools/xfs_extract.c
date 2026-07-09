@@ -8,7 +8,7 @@
  *                 Linux  (uses FUSE  via fsxfsmount).
  *
  * Windows usage: xfs_extract <xfs_image> <output_dir> [-v]
- *                [-t temp_folder] [-m path_to_fsxfsmount.exe]
+ *                [-l log_file] [-t temp_folder] [-m path_to_fsxfsmount.exe]
  *
  * POSIX usage:   xfs_extract <xfs_image> <output_dir> [-v]
  *                [-l log_file] [-t temp_folder] [-m path_to_fsxfsmount]
@@ -16,6 +16,7 @@
  * Options:
  *   -v                     Enable verbose logging
  *   -h, --help             Show this help message
+ *   -l, --log-file PATH    Write logs to the specified file
  *   -t, --temp-folder PATH Override temporary mount base folder
  *   -m, --mount PATH       Path to fsxfsmount(.exe)
  *
@@ -46,20 +47,28 @@
 static FILE *g_log = NULL;
 
 static void xfs_extract_log_open(
-    void )
+    const wchar_t *log_file_path )
 {
     wchar_t log_path[ MAX_PATH ];
-    DWORD len = GetModuleFileNameW( NULL, log_path, MAX_PATH );
-    if( len == 0 )
+
+    if( log_file_path != NULL && log_file_path[ 0 ] != L'\0' )
     {
-        return;
+        _snwprintf( log_path, MAX_PATH, L"%s", log_file_path );
     }
-    wchar_t *last_slash = wcsrchr( log_path, L'\\' );
-    if( last_slash != NULL )
+    else
     {
-        *( last_slash + 1 ) = L'\0';
+        DWORD len = GetModuleFileNameW( NULL, log_path, MAX_PATH );
+        if( len == 0 )
+        {
+            return;
+        }
+        wchar_t *last_slash = wcsrchr( log_path, L'\\' );
+        if( last_slash != NULL )
+        {
+            *( last_slash + 1 ) = L'\0';
+        }
+        wcsncat( log_path, L"log.txt", MAX_PATH - (DWORD) wcslen( log_path ) - 1 );
     }
-    wcsncat( log_path, L"log.txt", MAX_PATH - (DWORD) wcslen( log_path ) - 1 );
     g_log = _wfsopen(log_path, L"a", _SH_DENYWR);
 }
 
@@ -281,12 +290,13 @@ static void xfs_extract_usage_w(
     FILE *stream )
 {
     fwprintf( stream,
-        L"Usage: xfs_extract <xfs_image> <output_dir> [-v] [-t temp_folder]"
-        L" [-m path_to_fsxfsmount.exe]\n"
+        L"Usage: xfs_extract <xfs_image> <output_dir> [-v] [-l log_file]"
+        L" [-t temp_folder] [-m path_to_fsxfsmount.exe]\n"
         L"\n"
         L"Options:\n"
-        L"  -v                       Enable verbose logging to log.txt\n"
+        L"  -v                       Enable verbose logging\n"
         L"  -h, --help               Show this help\n"
+        L"  -l, --log-file PATH      Write logs to the specified file\n"
         L"  -t, --temp-folder PATH   Override the temporary mount base folder\n"
         L"  -m, --mount PATH         Use the specified fsxfsmount.exe\n"
         L"\n"
@@ -310,6 +320,7 @@ int wmain(
     STARTUPINFOW        si;
     PROCESS_INFORMATION pi;
     const wchar_t      *explicit_mount = NULL;
+    const wchar_t      *log_file_path  = NULL;
     const wchar_t      *temp_base      = NULL;
     int                 mount_wait     = XFS_EXTRACT_WAIT_FOR_MOUNT_ERROR;
     DWORD               exit_code      = 0;
@@ -345,6 +356,19 @@ int wmain(
         {
             xfs_extract_usage_w( stdout );
             return( 0 );
+        }
+        else if( wcscmp( argv[ argument_index ], L"-l" ) == 0
+              || wcscmp( argv[ argument_index ], L"--log-file" ) == 0 )
+        {
+            const wchar_t *option_name = argv[ argument_index ];
+            argument_index++;
+            if( argument_index >= argc )
+            {
+                fwprintf( stderr, L"Error: missing value for %s.\n", option_name );
+                return( 1 );
+            }
+            log_file_path = argv[ argument_index ];
+            verbose = 1;
         }
         else if( wcscmp( argv[ argument_index ], L"-t" ) == 0
               || wcscmp( argv[ argument_index ], L"--temp-folder" ) == 0 )
@@ -383,10 +407,14 @@ int wmain(
 
     if( verbose != 0 )
     {
-        xfs_extract_log_open();
+        xfs_extract_log_open( log_file_path );
     }
     xfs_extract_log( L"Image : %s", xfs_image );
     xfs_extract_log( L"Output: %s", output_dir );
+    if( log_file_path != NULL )
+    {
+        xfs_extract_log( L"Log file: %s", log_file_path );
+    }
 
     if( !xfs_extract_file_exists_w( xfs_image ) )
     {
