@@ -1,7 +1,7 @@
 /*
  * Volume functions
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -136,6 +136,15 @@ int libfsxfs_volume_get_format_version(
      libcerror_error_t **error );
 
 LIBFSXFS_EXTERN \
+int libfsxfs_volume_get_features_flags(
+     libfsxfs_volume_t *volume,
+     uint32_t *compatible_features_flags,
+     uint32_t *read_only_compatible_features_flags,
+     uint32_t *incompatible_features_flags,
+     uint32_t *journal_incompatible_features_flags,
+     libcerror_error_t **error );
+
+LIBFSXFS_EXTERN \
 int libfsxfs_volume_get_utf8_label_size(
      libfsxfs_volume_t *volume,
      size_t *utf8_string_size,
@@ -159,6 +168,11 @@ int libfsxfs_volume_get_utf16_label(
      libfsxfs_volume_t *volume,
      uint16_t *utf16_string,
      size_t utf16_string_size,
+     libcerror_error_t **error );
+
+int libfsxfs_internal_volume_get_root_directory(
+     libfsxfs_internal_volume_t *internal_volume,
+     libfsxfs_file_entry_t **file_entry,
      libcerror_error_t **error );
 
 LIBFSXFS_EXTERN \

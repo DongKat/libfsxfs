@@ -1,7 +1,7 @@
 /*
  * Debug functions
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -149,6 +149,95 @@ void libfsxfs_debug_print_secondary_feature_flags(
 	{
 		libcnotify_printf(
 		 "\t(XFS_SB_VERSION2_FTYPE)\n" );
+	}
+}
+
+/* Prints the read-only compatible features flags
+ */
+void libfsxfs_debug_print_read_only_compatible_features_flags(
+      uint32_t read_only_compatible_features_flags )
+{
+	if( ( read_only_compatible_features_flags & 0x00000001UL ) != 0 )
+	{
+		libcnotify_printf(
+		 "\t(XFS_SB_FEAT_RO_COMPAT_FINOBT)\n" );
+	}
+	if( ( read_only_compatible_features_flags & 0x00000002UL ) != 0 )
+	{
+		libcnotify_printf(
+		 "\t(XFS_SB_FEAT_RO_COMPAT_RMAPBT)\n" );
+	}
+	if( ( read_only_compatible_features_flags & 0x00000004UL ) != 0 )
+	{
+		libcnotify_printf(
+		 "\t(XFS_SB_FEAT_RO_COMPAT_REFLINK)\n" );
+	}
+	if( ( read_only_compatible_features_flags & 0x00000008UL ) != 0 )
+	{
+		libcnotify_printf(
+		 "\t(XFS_SB_FEAT_RO_COMPAT_INOBTCNT)\n" );
+	}
+}
+
+/* Prints the incompatible features flags
+ */
+void libfsxfs_debug_print_incompatible_features_flags(
+      uint32_t incompatible_features_flags )
+{
+	if( ( incompatible_features_flags & 0x00000001UL ) != 0 )
+	{
+		libcnotify_printf(
+		 "\t(XFS_SB_FEAT_INCOMPAT_FTYPE)\n" );
+	}
+	if( ( incompatible_features_flags & 0x00000002UL ) != 0 )
+	{
+		libcnotify_printf(
+		 "\t(XFS_SB_FEAT_INCOMPAT_SPINODES)\n" );
+	}
+	if( ( incompatible_features_flags & 0x00000004UL ) != 0 )
+	{
+		libcnotify_printf(
+		 "\t(XFS_SB_FEAT_INCOMPAT_META_UUID)\n" );
+	}
+	if( ( incompatible_features_flags & 0x00000008UL ) != 0 )
+	{
+		libcnotify_printf(
+		 "\t(XFS_SB_FEAT_INCOMPAT_BIGTIME)\n" );
+	}
+	if( ( incompatible_features_flags & 0x00000010UL ) != 0 )
+	{
+		libcnotify_printf(
+		 "\t(XFS_SB_FEAT_INCOMPAT_NEEDSREPAIR)\n" );
+	}
+	if( ( incompatible_features_flags & 0x00000020UL ) != 0 )
+	{
+		libcnotify_printf(
+		 "\t(XFS_SB_FEAT_INCOMPAT_NREXT64)\n" );
+	}
+	if( ( incompatible_features_flags & 0x00000040UL ) != 0 )
+	{
+		libcnotify_printf(
+		 "\t(XFS_SB_FEAT_INCOMPAT_EXCHRANGE)\n" );
+	}
+	if( ( incompatible_features_flags & 0x00000080UL ) != 0 )
+	{
+		libcnotify_printf(
+		 "\t(XFS_SB_FEAT_INCOMPAT_PARENT)\n" );
+	}
+	if( ( incompatible_features_flags & 0x00000100UL ) != 0 )
+	{
+		libcnotify_printf(
+		 "\t(XFS_SB_FEAT_INCOMPAT_METADIR)\n" );
+	}
+	if( ( incompatible_features_flags & 0x00000200UL ) != 0 )
+	{
+		libcnotify_printf(
+		 "\t(XFS_SB_FEAT_INCOMPAT_ZONED)\n" );
+	}
+	if( ( incompatible_features_flags & 0x00000400UL ) != 0 )
+	{
+		libcnotify_printf(
+		 "\t(XFS_SB_FEAT_INCOMPAT_ZONE_GAPS)\n" );
 	}
 }
 

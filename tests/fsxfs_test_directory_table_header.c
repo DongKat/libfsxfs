@@ -1,7 +1,7 @@
 /*
  * Library directory_table_header type test program
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -34,6 +34,7 @@
 #include "fsxfs_test_unused.h"
 
 #include "../libfsxfs/libfsxfs_directory_table_header.h"
+#include "../libfsxfs/libfsxfs_io_handle.h"
 
 uint8_t fsxfs_test_directory_table_header_data1[ 6 ] = {
 	0x09, 0x00, 0x00, 0x00, 0x15, 0xc0 };
@@ -281,10 +282,33 @@ int fsxfs_test_directory_table_header_read_data(
 {
 	libcerror_error_t *error                                  = NULL;
 	libfsxfs_directory_table_header_t *directory_table_header = NULL;
+	libfsxfs_io_handle_t *io_handle                           = NULL;
 	int result                                                = 0;
 
 	/* Initialize test
 	 */
+	result = libfsxfs_io_handle_initialize(
+	          &io_handle,
+	          &error );
+
+	FSXFS_TEST_ASSERT_EQUAL_INT(
+	 "result",
+	 result,
+	 1 );
+
+	FSXFS_TEST_ASSERT_IS_NOT_NULL(
+	 "io_handle",
+	 io_handle );
+
+	FSXFS_TEST_ASSERT_IS_NULL(
+	 "error",
+	 error );
+
+	io_handle->format_version = 4;
+	io_handle->block_size     = 1024;
+	io_handle->inode_size     = 128;
+	io_handle->feature_flags  = 0x2000;
+
 	result = libfsxfs_directory_table_header_initialize(
 	          &directory_table_header,
 	          &error );
@@ -306,6 +330,7 @@ int fsxfs_test_directory_table_header_read_data(
 	 */
 	result = libfsxfs_directory_table_header_read_data(
 	          directory_table_header,
+	          io_handle,
 	          fsxfs_test_directory_table_header_data1,
 	          6,
 	          &error );
@@ -323,6 +348,7 @@ int fsxfs_test_directory_table_header_read_data(
 	 */
 	result = libfsxfs_directory_table_header_read_data(
 	          NULL,
+	          io_handle,
 	          fsxfs_test_directory_table_header_data1,
 	          6,
 	          &error );
@@ -342,6 +368,7 @@ int fsxfs_test_directory_table_header_read_data(
 	result = libfsxfs_directory_table_header_read_data(
 	          directory_table_header,
 	          NULL,
+	          fsxfs_test_directory_table_header_data1,
 	          6,
 	          &error );
 
@@ -359,6 +386,26 @@ int fsxfs_test_directory_table_header_read_data(
 
 	result = libfsxfs_directory_table_header_read_data(
 	          directory_table_header,
+	          io_handle,
+	          NULL,
+	          6,
+	          &error );
+
+	FSXFS_TEST_ASSERT_EQUAL_INT(
+	 "result",
+	 result,
+	 -1 );
+
+	FSXFS_TEST_ASSERT_IS_NOT_NULL(
+	 "error",
+	 error );
+
+	libcerror_error_free(
+	 &error );
+
+	result = libfsxfs_directory_table_header_read_data(
+	          directory_table_header,
+	          io_handle,
 	          fsxfs_test_directory_table_header_data1,
 	          (size_t) SSIZE_MAX + 1,
 	          &error );
@@ -377,6 +424,7 @@ int fsxfs_test_directory_table_header_read_data(
 
 	result = libfsxfs_directory_table_header_read_data(
 	          directory_table_header,
+	          io_handle,
 	          fsxfs_test_directory_table_header_data1,
 	          0,
 	          &error );
@@ -412,6 +460,23 @@ int fsxfs_test_directory_table_header_read_data(
 	 "error",
 	 error );
 
+	result = libfsxfs_io_handle_free(
+	          &io_handle,
+	          &error );
+
+	FSXFS_TEST_ASSERT_EQUAL_INT(
+	 "result",
+	 result,
+	 1 );
+
+	FSXFS_TEST_ASSERT_IS_NULL(
+	 "io_handle",
+	 io_handle );
+
+	FSXFS_TEST_ASSERT_IS_NULL(
+	 "error",
+	 error );
+
 	return( 1 );
 
 on_error:
@@ -424,6 +489,12 @@ on_error:
 	{
 		libfsxfs_directory_table_header_free(
 		 &directory_table_header,
+		 NULL );
+	}
+	if( io_handle != NULL )
+	{
+		libfsxfs_io_handle_free(
+		 &io_handle,
 		 NULL );
 	}
 	return( 0 );

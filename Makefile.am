@@ -48,10 +48,9 @@ PKGCONFIG_FILES = \
 	libfsxfs.pc.in
 
 SETUP_PY_FILES = \
+	_build.py \
 	pyproject.toml \
-	setup.cfg \
-	setup.cfg.in \
-	setup.py
+	pyproject.toml.in
 
 SPEC_FILES = \
 	libfsxfs.spec \
@@ -78,6 +77,9 @@ pkgconfigdir = $(libdir)/pkgconfig
 
 pkgconfig_DATA = \
 	libfsxfs.pc
+
+check-build: all
+	cd $(srcdir)/tests && $(MAKE) check-build $(AM_MAKEFLAGS)
 
 libtool: @LIBTOOL_DEPS@
 	cd $(srcdir) && $(SHELL) ./config.status --recheck

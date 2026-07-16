@@ -1,7 +1,7 @@
 /*
  * The internal extern definition
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -24,21 +24,28 @@
 
 #include <common.h>
 
+#if !defined( __CYGWIN__ ) && !defined( _WIN32 ) && defined( __has_attribute )
+#if __has_attribute( visibility )
+#define LIBFSXFS_INTERNAL	__attribute__((visibility("hidden"))) extern
+
+#else
+#define LIBFSXFS_INTERNAL	extern
+
+#endif /* __has_attribute( visibility ) */
+#else
+#define LIBFSXFS_INTERNAL	extern
+
+#endif /* !defined( __CYGWIN__ ) && !defined( _WIN32 ) && defined( __has_attribute ) */
+
 /* Define HAVE_LOCAL_LIBFSXFS for local use of libfsxfs
  */
 #if !defined( HAVE_LOCAL_LIBFSXFS )
 
 #include <libfsxfs/extern.h>
 
-#if defined( __CYGWIN__ ) || defined( __MINGW32__ )
-#define LIBFSXFS_EXTERN_VARIABLE	extern
-#else
-#define LIBFSXFS_EXTERN_VARIABLE	LIBFSXFS_EXTERN
-#endif
-
 #else
 #define LIBFSXFS_EXTERN		/* extern */
-#define LIBFSXFS_EXTERN_VARIABLE	extern
+#define LIBFSXFS_EXTERN_VARIABLE	LIBFSXFS_INTERNAL
 
 #endif /* !defined( HAVE_LOCAL_LIBFSXFS ) */
 

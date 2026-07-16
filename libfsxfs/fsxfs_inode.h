@@ -1,7 +1,7 @@
 /*
  * Inode structures of the X File System (XFS)
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -28,6 +28,21 @@
 #if defined( __cplusplus )
 extern "C" {
 #endif
+
+typedef struct fsxfs_timestamp fsxfs_timestamp_t;
+
+struct fsxfs_timestamp
+{
+	/* Seconds
+	 * Consists of 4 bytes
+	 */
+	uint8_t seconds[ 4 ];
+
+	/* Nanoseconds
+	 * Consists of 4 bytes
+	 */
+	uint8_t nanoseconds[ 4 ];
+};
 
 typedef struct fsxfs_inode_v1 fsxfs_inode_v1_t;
 
@@ -79,34 +94,19 @@ struct fsxfs_inode_v1
 	uint8_t flush_counter[ 2 ];
 
 	/* Access time
-	 * Consists of 4 bytes
+	 * Consists of 8 bytes
 	 */
-	uint8_t access_time[ 4 ];
-
-	/* Access time nano seconds
-	 * Consists of 4 bytes
-	 */
-	uint8_t access_time_nano_seconds[ 4 ];
+	uint8_t access_time[ 8 ];
 
 	/* Modification time
-	 * Consists of 4 bytes
+	 * Consists of 8 bytes
 	 */
-	uint8_t modification_time[ 4 ];
-
-	/* Modification time nano seconds
-	 * Consists of 4 bytes
-	 */
-	uint8_t modification_time_nano_seconds[ 4 ];
+	uint8_t modification_time[ 8 ];
 
 	/* Inode change time
-	 * Consists of 4 bytes
+	 * Consists of 8 bytes
 	 */
-	uint8_t inode_change_time[ 4 ];
-
-	/* Inode change time nano seconds
-	 * Consists of 4 bytes
-	 */
-	uint8_t inode_change_time_nano_seconds[ 4 ];
+	uint8_t inode_change_time[ 8 ];
 
 	/* Data size
 	 * Consists of 8 bytes
@@ -163,7 +163,6 @@ struct fsxfs_inode_v1
 	 */
 	uint8_t generation_number[ 4 ];
 
-/* TODO verify if this value exists */
 	/* Unknown
 	 * Consists of 4 bytes
 	 */
@@ -230,34 +229,19 @@ struct fsxfs_inode_v2
 	uint8_t flush_counter[ 2 ];
 
 	/* Access time
-	 * Consists of 4 bytes
+	 * Consists of 8 bytes
 	 */
-	uint8_t access_time[ 4 ];
-
-	/* Access time nano seconds
-	 * Consists of 4 bytes
-	 */
-	uint8_t access_time_nano_seconds[ 4 ];
+	uint8_t access_time[ 8 ];
 
 	/* Modification time
-	 * Consists of 4 bytes
+	 * Consists of 8 bytes
 	 */
-	uint8_t modification_time[ 4 ];
-
-	/* Modification time nano seconds
-	 * Consists of 4 bytes
-	 */
-	uint8_t modification_time_nano_seconds[ 4 ];
+	uint8_t modification_time[ 8 ];
 
 	/* Inode change time
-	 * Consists of 4 bytes
+	 * Consists of 8 bytes
 	 */
-	uint8_t inode_change_time[ 4 ];
-
-	/* Inode change time nano seconds
-	 * Consists of 4 bytes
-	 */
-	uint8_t inode_change_time_nano_seconds[ 4 ];
+	uint8_t inode_change_time[ 8 ];
 
 	/* Data size
 	 * Consists of 8 bytes
@@ -364,50 +348,42 @@ struct fsxfs_inode_v3
 	 */
 	uint8_t number_of_links[ 4 ];
 
-	/* Project identifier
+	/* Project identifier (lower 16-bit)
 	 * Consists of 2 bytes
 	 */
 	uint8_t project_identifier[ 2 ];
 
-	/* Unknown (padding)
-	 * Consists of 8 bytes
-	 */
-	uint8_t unknown2[ 8 ];
-
-	/* Flush counter
+	/* Project identifier (upper 16-bit)
 	 * Consists of 2 bytes
 	 */
-	uint8_t flush_counter[ 2 ];
+	uint8_t project_identifier_upper[ 2 ];
 
+	union
+	{
+		/* Unknown (padding)
+		 * Consists of 8 bytes
+		 */
+		uint8_t unknown2[ 8 ];
+
+		/* Number of data extents if XFS_SB_FEAT_INCOMPAT_NREXT64 is set
+		 * Consists of 8 bytes
+		 */
+		uint8_t number_of_data_extents_64bit[ 8 ];
+	};
 	/* Access time
-	 * Consists of 4 bytes
+	 * Consists of 8 bytes
 	 */
-	uint8_t access_time[ 4 ];
-
-	/* Access time nano seconds
-	 * Consists of 4 bytes
-	 */
-	uint8_t access_time_nano_seconds[ 4 ];
+	uint8_t access_time[ 8 ];
 
 	/* Modification time
-	 * Consists of 4 bytes
+	 * Consists of 8 bytes
 	 */
-	uint8_t modification_time[ 4 ];
-
-	/* Modification time nano seconds
-	 * Consists of 4 bytes
-	 */
-	uint8_t modification_time_nano_seconds[ 4 ];
+	uint8_t modification_time[ 8 ];
 
 	/* Inode change time
-	 * Consists of 4 bytes
+	 * Consists of 8 bytes
 	 */
-	uint8_t inode_change_time[ 4 ];
-
-	/* Inode change time nano seconds
-	 * Consists of 4 bytes
-	 */
-	uint8_t inode_change_time_nano_seconds[ 4 ];
+	uint8_t inode_change_time[ 8 ];
 
 	/* Data size
 	 * Consists of 8 bytes
@@ -424,16 +400,30 @@ struct fsxfs_inode_v3
 	 */
 	uint8_t extent_size[ 4 ];
 
-	/* Number of data extents
-	 * Consists of 4 bytes
-	 */
-	uint8_t number_of_data_extents[ 4 ];
+	union
+	{
+		/* Number of data extents
+		 * Consists of 4 bytes
+		 */
+		uint8_t number_of_data_extents[ 4 ];
 
-	/* Number of attributes extents
-	 * Consists of 2 bytes
-	 */
-	uint8_t number_of_attributes_extents[ 2 ];
+		/* Number of attributes extents if XFS_SB_FEAT_INCOMPAT_NREXT64 is set
+		 * Consists of 4 bytes
+		 */
+		uint8_t number_of_attributes_extents_32bit[ 4 ];
+	};
+	union
+	{
+		/* Number of attributes extents
+		 * Consists of 2 bytes
+		 */
+		uint8_t number_of_attributes_extents[ 2 ];
 
+		/* Unknown if XFS_SB_FEAT_INCOMPAT_NREXT64 is set
+		 * Consists of 2 bytes
+		 */
+		uint8_t unknown4b[ 2 ];
+	};
 	/* Attributes fork (descriptor) offset
 	 * Consists of 1 byte
 	 */
@@ -500,14 +490,9 @@ struct fsxfs_inode_v3
 	uint8_t unknown8[ 12 ];
 
 	/* Creation time
-	 * Consists of 4 bytes
+	 * Consists of 8 bytes
 	 */
-	uint8_t creation_time[ 4 ];
-
-	/* Creation time nano seconds
-	 * Consists of 4 bytes
-	 */
-	uint8_t creation_time_nano_seconds[ 4 ];
+	uint8_t creation_time[ 8 ];
 
 	/* Inode number
 	 * Consists of 8 bytes

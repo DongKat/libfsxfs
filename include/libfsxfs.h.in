@@ -1,7 +1,7 @@
 /*
  * Library to access the X File System (XFS) format
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -269,6 +269,18 @@ int libfsxfs_volume_get_format_version(
      uint8_t *format_version,
      libfsxfs_error_t **error );
 
+/* Retrieves the feature flags
+ * Returns 1 if successful or -1 on error
+ */
+LIBFSXFS_EXTERN \
+int libfsxfs_volume_get_features_flags(
+     libfsxfs_volume_t *volume,
+     uint32_t *compatible_features_flags,
+     uint32_t *read_only_compatible_features_flags,
+     uint32_t *incompatible_features_flags,
+     uint32_t *journal_incompatible_features_flags,
+     libfsxfs_error_t **error );
+
 /* Retrieves the size of the UTF-8 encoded label
  * The returned size includes the end of string character
  * Returns 1 if successful or -1 on error
@@ -312,7 +324,7 @@ int libfsxfs_volume_get_utf16_label(
      libfsxfs_error_t **error );
 
 /* Retrieves the root directory file entry
- * Returns 1 if successful or -1 on error
+ * Returns 1 if successful, 0 if not available or -1 on error
  */
 LIBFSXFS_EXTERN \
 int libfsxfs_volume_get_root_directory(
@@ -374,7 +386,7 @@ int libfsxfs_file_entry_get_inode_number(
      libfsxfs_error_t **error );
 
 /* Retrieves the creation date and time
- * The timestamp is a signed 64-bit POSIX date and time value in number of nano seconds
+ * The timestamp is a signed 64-bit POSIX date and time value in number of nanoseconds
  * This value is retrieved from the inode
  * Returns 1 if successful, 0 if not available or -1 on error
  */
@@ -385,7 +397,7 @@ int libfsxfs_file_entry_get_creation_time(
      libfsxfs_error_t **error );
 
 /* Retrieves the modification date and time
- * The timestamp is a signed 64-bit POSIX date and time value in number of nano seconds
+ * The timestamp is a signed 64-bit POSIX date and time value in number of nanoseconds
  * This value is retrieved from the inode
  * Returns 1 if successful or -1 on error
  */
@@ -396,7 +408,7 @@ int libfsxfs_file_entry_get_modification_time(
      libfsxfs_error_t **error );
 
 /* Retrieves the access date and time
- * The timestamp is a signed 64-bit POSIX date and time value in number of nano seconds
+ * The timestamp is a signed 64-bit POSIX date and time value in number of nanoseconds
  * This value is retrieved from the inode
  * Returns 1 if successful or -1 on error
  */
@@ -407,7 +419,7 @@ int libfsxfs_file_entry_get_access_time(
      libfsxfs_error_t **error );
 
 /* Retrieves the inode change date and time
- * The timestamp is a signed 64-bit POSIX date and time value in number of nano seconds
+ * The timestamp is a signed 64-bit POSIX date and time value in number of nanoseconds
  * This value is retrieved from the inode
  * Returns 1 if successful or -1 on error
  */

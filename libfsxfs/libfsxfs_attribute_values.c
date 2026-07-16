@@ -1,7 +1,7 @@
 /*
  * Extended attribute values functions
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -217,6 +217,10 @@ int libfsxfs_attribute_values_set_name(
 
 		case 4:
 			name_prefix = "secure.";
+			break;
+
+		case 8:
+			name_prefix = "";
 			break;
 
 		default:

@@ -1,7 +1,7 @@
 /*
  * Extents functions
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -40,7 +40,7 @@ int libfsxfs_extents_get_last_extent(
 
 int libfsxfs_extents_read_data(
      libcdata_array_t *extents_array,
-     uint32_t number_of_extents,
+     uint64_t number_of_extents,
      const uint8_t *data,
      size_t data_size,
      uint8_t add_sparse_extents,

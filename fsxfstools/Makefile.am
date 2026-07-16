@@ -103,19 +103,22 @@ fsxfsmount_LDADD = \
 xfs_extract_SOURCES = \
 	xfs_extract.c
 
-xfs_extract_LDADD = \
-        @LIBBFIO_LIBADD@ \
-        @LIBCPATH_LIBADD@ \
-        @LIBCFILE_LIBADD@ \
-        @LIBUNA_LIBADD@ \
-        @LIBCSPLIT_LIBADD@ \
-        @LIBCNOTIFY_LIBADD@ \
-        @LIBCLOCALE_LIBADD@ \
-        @LIBCDATA_LIBADD@ \
-        ../libfsxfs/libfsxfs.la \
-        @LIBCERROR_LIBADD@ \
-        @LIBINTL@
-		
+xfs_extract_LDADD = \		
+		@LIBBFIO_LIBADD@ \
+		@LIBCPATH_LIBADD@ \
+		@LIBCFILE_LIBADD@ \
+		@LIBUNA_LIBADD@ \
+		@LIBCSPLIT_LIBADD@ \
+		@LIBCNOTIFY_LIBADD@ \
+		@LIBCLOCALE_LIBADD@ \
+		@LIBCDATA_LIBADD@ \
+		../libfsxfs/libfsxfs.la \
+		@LIBCERROR_LIBADD@ \
+		@LIBINTL@
+
+CLEANFILES = \
+	*.exe
+
 DISTCLEANFILES = \
 	Makefile \
 	Makefile.in

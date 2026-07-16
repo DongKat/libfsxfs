@@ -31,7 +31,7 @@ for the libfsxfs project.
 == License
 
 ....
-Copyright (C) 2020-2022, Joachim Metz <joachim.metz@gmail.com>.
+Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>.
 Permission is granted to copy, distribute and/or modify this document under the
 terms of the GNU Free Documentation License, Version 1.3 or any later version
 published by the Free Software Foundation; with no Invariant Sections, no
@@ -46,12 +46,14 @@ in the section entitled "GNU Free Documentation License".
 |===
 | Version | Author | Date | Comments
 | 0.0.1 | J.B. Metz | September 2020 | Initial version.
-| 0.0.2 | J.B. Metz | November 2020 | Additional information about data format.
+| 0.0.2 | J.B. Metz | November 2020 | Additional information about format.
 | 0.0.3 | J.B. Metz | April 2021 | Changes to formatting.
 | 0.0.4 | J.B. Metz | May 2021 | Clean up of some notes.
 | 0.0.5 | J.B. Metz | July 2021 | Additional information about extended attributes.
 | 0.0.6 | J.B. Metz | May 2022 | Additional information about extended attributes.
 | 0.0.7 | J.B. Metz | July 2022 | Additional information about device identifier.
+| 0.0.8 | J.B. Metz | May 2026 | Additional information about format.
+| 0.0.9 | J.B. Metz | July 2026 | Additional information about format.
 |===
 
 :numbered:
@@ -65,7 +67,7 @@ a placeholder for a name that never given.
 |===
 | Characteristics | Description
 | Byte order | big-endian
-| Date and time values | number of seconds since January 1, 1970 00:00:00 UTC (POSIX epoch) and fraction of second in number of nanoseconds
+| Date and time values | number of seconds since January 1, 1970 00:00:00 UTC (POSIX epoch) and fraction of second in number of nanoseconds, or in bigtime (number of nanoseconds since December 13, 1901 20:45:52 UTC)
 | Character strings |
 |===
 
@@ -137,9 +139,12 @@ Contains an UUID
 | 48 | 8 | | Journal block number +
 Contains a file system block number or 0 if the journal is stored on a separate device +
 See section: <<file_system_block_number,File system block number>>
-| 56 | 8 | | Root directory inode number
-| 64 | 8 | | Real-time bitmap extents inode number
-| 72 | 8 | | Real-time bitmap summary inode number
+| 56 | 8 | | Root directory inode number +
+Contains -1 (0xffffffffffffffff) if not set
+| 64 | 8 | | Real-time bitmap extents inode number +
+Contains -1 (0xffffffffffffffff) if not set
+| 72 | 8 | | Real-time bitmap summary inode number +
+Contains -1 (0xffffffffffffffff) if not set
 | 80 | 4 | | Real-time extent size +
 Contains number of blocks
 | 84 | 4 | | Allocation group size +
@@ -149,8 +154,7 @@ Contains number of blocks
 Contains number of blocks
 | 96 | 4 | | Journal size +
 Contains number of blocks
-| 100 | 2 | | Version and feature flags +
-The 4 LSB contain the version the remaining bits are used to store the <<feature_flags,feature flags>>
+| 100 | 2 | | <<version_and_feature_flags,Version and feature flags>>
 | 102 | 2 | | Sector size (in bytes)
 | 104 | 2 | | Inode size (in bytes) +
 Supported range 256 - 2048
@@ -190,9 +194,9 @@ See sction: <<miscellaneous_flags,Miscellaneous flags>>
 | 180 | 4 | | Inode chunk alignment size +
 Contains number of blocks
 4+| _Common_
-| 184 | 4 | | Stripe or RAID unit size +
+| 184 | 4 | | Stripe (or RAID) unit size +
 Contains number of blocks
-| 188 | 4 | | Stripe of RAID width +
+| 188 | 4 | | Stripe (or RAID) width +
 Contains number of blocks
 | 192 | 1 | | Directory block size in log2
 | 193 | 1 | | Journal device sector size in log2
@@ -205,7 +209,7 @@ See section: <<secondary_feature_flags,Secondary feature flags>>
 | 204 | 4 | | Copy of secondary feature flags +
 Introduced to work-around 64-bit alignment errors +
 See section: <<secondary_feature_flags,Secondary feature flags>>
-4+| _If file system version >= 5_
+4+| _If superblock format version >= 5 (XFS_SB_VERSION_5)_
 | 208 | 4 | | (Read-write) compatible feature flags +
 See section: <<compatible_feature_flags,Compatible feature flags>>
 | 212 | 4 | | Read-only compatible feature flags +
@@ -229,23 +233,43 @@ Contains an UUID
 Allocation group size and allocation group size in log2 are not necessarily
 equivalent.
 
-=== [[feature_flags]]Feature flags
+[NOTE]
+Is superblock format version 1 152 bytes in size?
+
+=== [[version_and_feature_flags]]Version and feature flags
+
+The 4 LSB contain the version the remaining bits are used to store feature flags.
+
+[cols="1,5",options="header"]
+|===
+| Version | Identifier | Introduced in
+3+| _First generation_
+| 1 | XFS_SB_VERSION_1 | Introduced in Irix 5.3
+| 2 | XFS_SB_VERSION_2 | Introduced in Irix 6.2, added extended attribute support.
+| 3 | XFS_SB_VERSION_3 | Introduced in Irix 6.2, added inode version 2 support.
+3+| _Second generation_
+| 4 | XFS_SB_VERSION_4 | Introduced in Irix 6.2, added directory version 2 support.
+3+| _Third generation_
+| 5 | XFS_SB_VERSION_5 | Intoduces in Linux 3.10.
+|===
 
 [cols="1,1,5",options="header"]
 |===
 | Value | Identifier | Description
+3+| _Introduced in XFS_SB_VERSION_2_
 | 0x0010 | XFS_SB_VERSION_ATTRBIT | Inodes support extended attributes
-| 0x0020 | XFS_SB_VERSION_NLINKBIT | Inodes has 32-bit number of links value
+3+| _Introduced in XFS_SB_VERSION_3_
+| 0x0020 | XFS_SB_VERSION_NLINKBIT | Inodes use a 32-bit number of links value
+3+| _Introduced in XFS_SB_VERSION_4_
 | 0x0040 | XFS_SB_VERSION_QUOTABIT | Quotas enabled
 | 0x0080 | XFS_SB_VERSION_ALIGNBIT | Use inode chunk alignment
-| 0x0100 | XFS_SB_VERSION_DALIGNBIT | Has underlying stripe or RAID
+| 0x0100 | XFS_SB_VERSION_DALIGNBIT | Has underlying stripe or RAID. The Stripe (or RAID) unit size and width values in the superblock should be set.
 | 0x0200 | XFS_SB_VERSION_SHAREDBIT | [yellow-background]*Unknown (set if reserved shared version is used)*
 | 0x0400 | XFS_SB_VERSION_LOGV2BIT | Has version 2 journaling logs
 | 0x0800 | XFS_SB_VERSION_SECTORBIT | Sector size is not 512 bytes
 | 0x1000 | XFS_SB_VERSION_EXTFLGBIT | Unwritten extents are used +
 Should always be set.
-| 0x2000 | XFS_SB_VERSION_DIRV2BIT | Version 2 directories are used +
-Should always be set.
+| 0x2000 | XFS_SB_VERSION_DIRV2BIT | Version 2 directories are used
 | 0x4000 | XFS_SB_VERSION_BORGBIT | [yellow-background]*Unknown (ASCII only case-insensitive)*
 | 0x8000 | XFS_SB_VERSION_MOREBITSBIT | Secondary feature flags are used
 |===
@@ -302,9 +326,10 @@ Current no compatible feature flags are defined
 [cols="1,1,5",options="header"]
 |===
 | Value | Identifier | Description
-| 0x00000001 | XFS_SB_FEAT_RO_COMPAT_FINOBT |
-| 0x00000002 | XFS_SB_FEAT_RO_COMPAT_RMAPBT |
-| 0x00000004 | XFS_SB_FEAT_RO_COMPAT_REFLINK |
+| 0x00000001 | XFS_SB_FEAT_RO_COMPAT_FINOBT | Has free inode btree
+| 0x00000002 | XFS_SB_FEAT_RO_COMPAT_RMAPBT | Has reverse map btree
+| 0x00000004 | XFS_SB_FEAT_RO_COMPAT_REFLINK | Has reflinked files
+| 0x00000008 | XFS_SB_FEAT_RO_COMPAT_INOBTCNT | Has inobt block counts
 |===
 
 === [[incompatible_feature_flags]]Incompatible feature flags
@@ -312,9 +337,17 @@ Current no compatible feature flags are defined
 [cols="1,1,5",options="header"]
 |===
 | Value | Identifier | Description
-| 0x00000001 | XFS_SB_FEAT_INCOMPAT_FTYPE |
-| 0x00000002 | XFS_SB_FEAT_INCOMPAT_SPINODES |
+| 0x00000001 | XFS_SB_FEAT_INCOMPAT_FTYPE | Has filetype in dirent
+| 0x00000002 | XFS_SB_FEAT_INCOMPAT_SPINODES | Has sparse inode chunks
 | 0x00000004 | XFS_SB_FEAT_INCOMPAT_META_UUID | Use a metadata identifier
+| 0x00000008 | XFS_SB_FEAT_INCOMPAT_BIGTIME | Inode (v3) contains bigtime timestamps
+| 0x00000010 | XFS_SB_FEAT_INCOMPAT_NEEDSREPAIR | Needs repair
+| 0x00000020 | XFS_SB_FEAT_INCOMPAT_NREXT64 | Inode (v3) contains a 64-bit number of data extents and 32-bit number of (extended) attribute extent values
+| 0x00000040 | XFS_SB_FEAT_INCOMPAT_EXCHRANGE | Has exchangerange
+| 0x00000080 | XFS_SB_FEAT_INCOMPAT_PARENT | Has parent directory reference attributes
+| 0x00000100 | XFS_SB_FEAT_INCOMPAT_METADIR | Has metadata directory (tree)
+| 0x00000200 | XFS_SB_FEAT_INCOMPAT_ZONED | Has zoned RT allocator
+| 0x00000400 | XFS_SB_FEAT_INCOMPAT_ZONE_GAPS | RTGs have LBA gaps
 |===
 
 === [[journal_incompatible_feature_flags]]Journal incompatible feature flags
@@ -355,7 +388,7 @@ Contains number of blocks
 Contains number of blocks
 4+| _Only used if the XFS_SB_VERSION2_LAZYSBCOUNTBIT feature flag is set_
 | 60 | 4 | | Number of blocks used for the free space B+ trees
-4+| _If file system version >= 5_
+4+| _If superblock format version >= 5 (XFS_SB_VERSION_5)_
 | 64 | 16 | | Block type identifier +
 Contains an UUID that should correspond to [yellow-background]*sb_uuid or sb_meta_uuid*
 | 80 | 4 | | [yellow-background]*Unknown (Size of the reverse mapping B+ tree in blocks)*
@@ -415,10 +448,10 @@ Contains a block number relative to the start of the allocation group
 | 28 | 4 | | Number of unused (free) inodes in the allocation group
 | 32 | 4 | | First inode number of the last allocated inode chunk +
 Contains an inode number relative to the allocation group
-| 36 | 4 | -1 (0xffffffff) | [yellow-background]*Unknown (deprecated)*
+| 36 | 4 | -1 (0xffffffff) | [yellow-background]*Unknown*
 | 40 | 64 x 4 | | Hash table of unlinked (deleted) inodes that are still being referenced +
 Contains -1 (0xffffffff) if not set
-4+| _If file system version >= 5_
+4+| _If superblock format version >= 5 (XFS_SB_VERSION_5)_
 | 296 | 16 | | Block type identifier +
 Contains an UUID that should correspond to [yellow-background]*sb_uuid or sb_meta_uuid*
 | 312 | 4 | | Checksum
@@ -463,7 +496,7 @@ Contains 0 for a leaf block
 Contains a block number relative to the start of the allocation group or -1 (0xffffffff) if not set
 | 12 | 4 | | Next B+ tree block number +
 Contains a block number relative to the start of the allocation group or -1 (0xffffffff) if not set
-4+| _If file system version >= 5_
+4+| _If superblock format version >= 5 (XFS_SB_VERSION_5)_
 | 16 | 8 | | Block number
 | 24 | 8 | | Log sequence number
 | 32 | 16 | | Block type identifier +
@@ -489,7 +522,7 @@ Contains 0 for a leaf block
 Contains -1 (0xffffffff) if not set
 | 16 | 8 | | Next B+ tree block number +
 Contains -1 (0xffffffff) if not set
-4+| _If file system version >= 5_
+4+| _If superblock format version >= 5 (XFS_SB_VERSION_5)_
 | 24 | 8 | | Block number
 | 32 | 8 | | Log sequence number
 | 40 | 16 | | Block type identifier +
@@ -635,7 +668,7 @@ The inode can be followed by:
 
 === Inode version 1
 
-The inode version 1 (xfs_dinode_core_t) is 96 bytes of size and consist of:
+The inode version 1 (xfs_dinode_core_t) is 100 bytes of size and consist of:
 
 [cols="1,1,1,5",options="header"]
 |===
@@ -650,21 +683,21 @@ See section: <<fork_type,Fork type>>
 | 6 | 2 | | Number of links
 | 8 | 4 | | Owner (or user) identifier (UID)
 | 12 | 4 | | Group identifier (GID)
-| 16 | 14 | 0 | [yellow-background]*Unknown (padding)*
+| 16 | 14 | 0 | [yellow-background]*Unknown (contains data in XFS_SB_VERSION_1)*
 | 30 | 2 | | Flush counter +
 Contains a value that is incremented on flush
 | 32 | 4 | | (last) access time +
 Contains a POSIX timestamp in seconds
 | 36 | 4 | | (last) access time fraction of second +
-Contains number of nano seconds
+Contains number of nanoseconds
 | 40 | 4 | | (last) modification time +
 Contains a POSIX timestamp in seconds
 | 44 | 4 | | (last) modification time fraction of second +
-Contains number of nano seconds
+Contains number of nanoseconds
 | 48 | 4 | | (last) inode change time +
 Contains a POSIX timestamp in seconds
 | 52 | 4 | | (last) inode change time fraction of second +
-Contains number of nano seconds
+Contains number of nanoseconds
 | 56 | 8 | | (Data) size
 | 64 | 8 | | Number of (data) blocks
 | 72 | 4 | | Extent size
@@ -678,11 +711,14 @@ Contains an offset (value x 8) relative to the end of the inode
 | 88 | 2 | | [yellow-background]*Unknown (DMAPI state)*
 | 90 | 2 | | Inode flags
 | 92 | 4 | | Generation number
+4+| _Non-inode core field
+| 96 | 4 | | [yellow-background]*Unknown (next unlinked inode)* +
+Contains -1 (0xffffffff) if not set
 |===
 
 === Inode version 2
 
-The inode version 2 (xfs_dinode_core_t) is 96 bytes of size and consist of:
+The inode version 2 (xfs_dinode_core_t) is 100 bytes of size and consist of:
 
 [cols="1,1,1,5",options="header"]
 |===
@@ -705,15 +741,15 @@ Contains a value that is incremented on flush
 | 32 | 4 | | (last) access time +
 Contains a POSIX timestamp in seconds
 | 36 | 4 | | (last) access time fraction of second +
-Contains number of nano seconds
+Contains number of nanoseconds
 | 40 | 4 | | (last) modification time +
 Contains a POSIX timestamp in seconds
 | 44 | 4 | | (last) modification time fraction of second +
-Contains number of nano seconds
+Contains number of nanoseconds
 | 48 | 4 | | (last) inode change time +
 Contains a POSIX timestamp in seconds
 | 52 | 4 | | (last) inode change time fraction of second +
-Contains number of nano seconds
+Contains number of nanoseconds
 | 56 | 8 | | (Data) size
 | 64 | 8 | | Number of (data) blocks
 | 72 | 4 | | Extent size
@@ -727,8 +763,9 @@ Contains an offset (value x 8) relative to the end of the inode
 | 88 | 2 | | [yellow-background]*Unknown (DMAPI state)*
 | 90 | 2 | | Inode flags
 | 92 | 4 | | Generation number
-4+| _Non-inode core field_
-| 96 | 4 | | [yellow-background]*Unknown (next unlinked inode)*
+4+| _Non-inode core field
+| 96 | 4 | | [yellow-background]*Unknown (next unlinked inode)* +
+Contains -1 (0xffffffff) if not set
 |===
 
 === Inode version 3
@@ -749,28 +786,46 @@ See section: <<fork_type,Fork type>>
 | 8 | 4 | | Owner (or user) identifier (UID)
 | 12 | 4 | | Group identifier (GID)
 | 16 | 4 | | Number of links
-| 20 | 2 | | Project identifier
-| 22 | 8 | 0 | [yellow-background]*Unknown (padding)*
-| 30 | 2 | | Flush counter +
-Contains a value that is incremented on flush
+| 20 | 2 | | Project identifier lower 16-bit
+| 22 | 2 | | Project identifier upper 16-bit
+4+| _If incompatible feature flag XFS_SB_FEAT_INCOMPAT_NREXT64 not is set_
+| 24 | 8 | 0 | [yellow-background]*Unknown (padding)*
+4+| _If incompatible feature flag XFS_SB_FEAT_INCOMPAT_NREXT64 is set_
+| 24 | 8 | | Number of data extents (64-bit)
+4+| _Common_
+4+| _If incompatible feature flag XFS_SB_FEAT_INCOMPAT_BIGTIME not is set_
 | 32 | 4 | | (last) access time +
 Contains a POSIX timestamp in seconds
 | 36 | 4 | | (last) access time fraction of second +
-Contains number of nano seconds
+Contains number of nanoseconds
 | 40 | 4 | | (last) modification time +
 Contains a POSIX timestamp in seconds
 | 44 | 4 | | (last) modification time fraction of second +
-Contains number of nano seconds
+Contains number of nanoseconds
 | 48 | 4 | | (last) inode change time +
 Contains a POSIX timestamp in seconds
 | 52 | 4 | | (last) inode change time fraction of second +
-Contains number of nano seconds
+Contains number of nanoseconds
+4+| _If incompatible feature flag XFS_SB_FEAT_INCOMPAT_BIGTIME is set_
+| 32 | 8 | | (last) access time +
+Contains a bigtime timestamp
+| 40 | 8 | | (last) modification time +
+Contains a bigtime timestamp
+| 48 | 8 | | (last) inode change time +
+Contains a bigtime timestamp
+4+| _Common_
 | 56 | 8 | | (Data) size
 | 64 | 8 | | Number of (data) blocks
 | 72 | 4 | | Extent size
+4+| _If incompatible feature flag XFS_SB_FEAT_INCOMPAT_NREXT64 not is set_
 | 76 | 4 | | Number of data extents
 | 80 | 2 | | Number of (extended) attributes extents +
 Can contain 0 if an attributes fork of type XFS_DINODE_FMT_EXTENTS is empty
+4+| _If incompatible feature flag XFS_SB_FEAT_INCOMPAT_NREXT64 is set_
+| 76 | 4 | | Number of (extended) attributes extents (32-bit) +
+Can contain 0 if an attributes fork of type XFS_DINODE_FMT_EXTENTS is empty
+| 80 | 2 | | [yellow-background]*Unknown (padding)*
+4+| _Common_
 | 82 | 1 | | (Extended) attributes fork descriptor offset +
 Contains an offset (value x 8) relative to the end of the inode
 | 83 | 1 | | (Extended) attributes fork type
@@ -780,7 +835,8 @@ Contains an offset (value x 8) relative to the end of the inode
 See section: <<inode_flags,Inode flags>>
 | 92 | 4 | | Generation number
 4+| _Pre version 3 non-inode core field_
-| 96 | 4 | | [yellow-background]*Unknown (next unlinked inode)*
+| 96 | 4 | | [yellow-background]*Unknown (next unlinked inode)* +
+Contains -1 (0xffffffff) if not set
 4+| _Introduced in version 3_
 | 100 | 4 | | Checksum
 | 104 | 8 | | Change count +
@@ -789,10 +845,15 @@ Contains the number of changes made to the inode
 | 120 | 8 | | Extended inode flags
 | 128 | 4 | | Copy-on-write (COW) extent size
 | 132 | 12 | | [yellow-background]*Unknown (padding)*
+4+| _If incompatible feature flag XFS_SB_FEAT_INCOMPAT_BIGTIME not is set_
 | 144 | 4 | | Creation time +
 Contains a POSIX timestamp in seconds
 | 148 | 4 | | Creation time fraction of second +
-Contains number of nano seconds
+Contains number of nanoseconds
+4+| _If incompatible feature flag XFS_SB_FEAT_INCOMPAT_BIGTIME is set_
+| 144 | 8 | | Creation time +
+Contains a bigtime timestamp
+4+| _Common_
 | 152 | 8 | | Inode number +
 Contains an absolute inode number
 | 160 | 16 | | Inode type identifier +
@@ -1000,12 +1061,28 @@ directory entries can be stored in multiple ways:
 
 === Short-form directory table
 
-The short-form directory table (xfs_dir2_sf_t) is stored in the inode (as inline
-data), where fork type is XFS_DINODE_FMT_LOCAL. The short-form directory table
-consist of:
+The short-form directory table (xfs_dir_sf_t or xfs_dir2_sf_t) is stored in the
+inode (as inline data), where fork type is XFS_DINODE_FMT_LOCAL. The short-form
+directory table consist of:
 
 * Short-form directory table header
 * Short-form directory table entries
+
+The XFS_SB_VERSION_DIRV2BIT flag in the superblock indicates if version 2 is
+used.
+
+==== Short-form directory table header version 1
+
+The short-form directory table header version 1 (xfs_dir_sf_hdr_t) is 9 bytes
+of size and consists of:
+
+[cols="1,1,1,5",options="header"]
+|===
+| Offset | Size | Value | Description
+| 0 | 8 | | Parent inode number +
+Contains an absolute inode number
+| 8 | 1 | | Number of entries
+|===
 
 ==== Short-form directory table header version 2
 
@@ -1026,6 +1103,21 @@ If the inode numbers are stored as 32-bit values then number of 32-bit entries
 is set and number of 64-bit entries must be 0. If the inode numbers are stored
 as 64-bit values then number of 64-bit entries is set and number of 32-bit
 entries must be 0.
+
+==== Short-form directory table entry version 1
+
+The short-form directory table entry version 1 (xfs_dir_sf_entry_t) is variable
+of size and consists of:
+
+[cols="1,1,1,5",options="header"]
+|===
+| Offset | Size | Value | Description
+| 0 | 8 | | Inode number +
+Contains an absolute inode number
+| 9 | 1 | | Name size +
+Does not include the end-of-string character
+| 10 | ... | | Name
+|===
 
 ==== Short-form directory table entry version 2
 
@@ -1050,7 +1142,92 @@ Contains an absolute inode number
 File type seems to be present on format version even if XFS_SB_VERSION2_FTYPE
 is not set.
 
-=== Block directory
+=== [[directory_leaf_block]]Directory (leaf) block
+
+A directory (leaf) block (xfs_dir_leafblock_t) consist of:
+
+* a block header
+* array of block entries
+* array of block values
+* a block footer
+
+If the XFS_SB_VERSION_DIRV2BIT flag in the superblock is set the directory
+is stored using a <<block_directory,Block directory>>.
+
+If more than one block is needed to store the extended attributes a
+<<directory_btree,Directory B+ tree>> is used.
+
+==== Directory (leaf) block header version 1
+
+A directory (leaf) block header version 1 (xfs_dir_leaf_hdr_t) is 16 bytes of
+size and consists of:
+
+[cols="1,1,1,5",options="header"]
+|===
+| Offset | Size | Value | Description
+| 0 | 12 | | <<file_system_block_header_version_1,File system block header version 1>>
+| 12 | 2 | | Number of entries
+| 14 | 2 | | Used data size +
+Contains the number of bytes of the block data that is used
+| 16 | 2 | | Used data offset
+| 18 | 1 | | Flag to indicate block compaction is needed
+| 19 | 1 | | [yellow-background]*Unknown (padding)*
+| 20 | 4 x 3 | | Array of free regions in the block +
+See section: <<block_free_region_v2,Block free region>>
+
+[NOTE]
+A directory (leaf) block header version 2 (xfs_dir2_leaf_hdr_t) is equivalent
+to version 1.
+
+==== Directory (leaf) block entry version 1
+
+The directory (leaf) block entry (xfs_dir_leaf_entry_t) is 8 bytes of size
+and consist of:
+
+[cols="1,1,1,5",options="header"]
+|===
+| Offset | Size | Value | Description
+| 0 | 4 | | Name hash
+| 4 | 2 | | Values offset +
+Contains an offset relative to the start of the directory block
+| 6 | 1 | | Name size +
+Does not include the end-of-string character
+| 7 | 1 | | [yellow-background]*Unknown (padding)*
+|===
+
+[NOTE]
+A directory (leaf) block entry version 2 (xfs_dir2_leaf_entry_t) is equivalent
+to version 1.
+
+==== Directory (leaf) block values
+
+The directory (leaf) block value (xfs_dir_leaf_name_t) is variable of size and
+consist of:
+
+[cols="1,1,1,5",options="header"]
+|===
+| Offset | Size | Value | Description
+| 0 | 8 | | Inode number +
+Contains an absolute inode number
+| 8 | ... | | Name
+|===
+
+==== Directory (leaf) block footer version 1
+
+A directory (leaf) block footer version 1 (xfs_dir_leaf_tail_t) is 4 bytes of
+size and consists of:
+
+[cols="1,1,1,5",options="header"]
+|===
+| Offset | Size | Value | Description
+| 0 | 4 | | [yellow-background]*Unknown (bestcount)*
+|===
+
+[NOTE]
+A directory (leaf) block footer version 2 (xfs_dir2_leaf_tail_t) is equivalent
+to version 1.
+
+=== [[block_directory]]Block directory
 
 A block directory (xfs_dir2_block_t) consist of one or more blocks that consist
 of:
@@ -1059,6 +1236,9 @@ of:
 * array of used and unused directory entries
 * hash values of the entries
 * a block directory footer
+
+If the XFS_SB_VERSION_DIRV2BIT flag in the superblock is not set the directory
+is stored using a <<directory_leaf_block,Directory (leaf) block>>
 
 ==== Block directory header
 
@@ -1070,7 +1250,7 @@ and consist of:
 [cols="1,1,1,5",options="header"]
 |===
 | Offset | Size | Value | Description
-| 0 | 4 | "XD2B" | Signature
+| 0 | 4 | "XD2B" or "XD2D" | Signature
 | 4 | 4 x 3 | | Array of free regions in the block +
 See section: <<block_free_region_v2,Block free region>>
 |===
@@ -1084,7 +1264,7 @@ and consist of:
 |===
 | Offset | Size | Value | Description
 4+| _Block header_
-| 0 | 4 | "XDB3" | Signature
+| 0 | 4 | "XDB3" or "XDD3" | Signature
 | 4 | 4 | | Checksum
 | 8 | 8 | | Block number
 | 16 | 8 | | Log sequence number
@@ -1096,6 +1276,19 @@ Contains the absolute inode number the block is part of
 | 48 | 4 x 3 | | Array of free regions in the block +
 See section: <<block_free_region_v2,Block free region>>
 | 60 | 4 | | [yellow-background]*Unknown (padding)*
+|===
+
+===== Block directory header version signatures
+
+[cols="1,5",options="header"]
+|===
+| Signature | Description
+| "XD2B" | Version 2 directory entries B+ tree (single block)
+| "XD2D" | Version 2 directory entries B+ tree (multi block)
+| "XD2F" | Version 2 directory free space B+ tree
+| "XDB3" | Version 3 Directory entries B+ tree (single block)
+| "XDD3" | Version 3 Directory entries B+ tree (multi block)
+| "XDF3" | Version 3 Directory free space B+ tree
 |===
 
 ===== [[block_free_region_v2]]Block free region version 2
@@ -1148,12 +1341,10 @@ Contains the size of the unused block including the size of the signature and en
 | ... | 2 | | [yellow-background]*Unknown (offset, tag)*
 |===
 
-==== Block directory hash value
+==== [[block_directory_hash_value]]Block directory hash value
 
-===== Block directory hash value version 2
-
-The block directory hash value version 2 (xfs_dir2_leaf_entry_t) is 8 bytes of
-size and consists of:
+The block directory hash value (xfs_dir_leaf_entry_t or xfs_dir2_leaf_entry_t)
+is 8 bytes of size and consists of:
 
 [cols="1,1,1,5",options="header"]
 |===
@@ -1177,76 +1368,39 @@ and consists of:
 | 4 | 4 | | Number of unused entries
 |===
 
-=== Directory B+ tree
+=== [[directory_btree]]Directory B+ tree
 
-The directory B+ tree uses different offset ranges to reference different
-types of extents:
+The first block in the extents is the B+ tree root block.
 
-[cols="1,1,5",options="header"]
-|===
-| Range | Identifier | Description
-| 0 - 32 GiB | | Directory entries (or data) extents
-| 32 - 64 GiB | XFS_DIR2_LEAF_OFFSET | Hash values (or leaf) extents
-| 64 - ... GiB | | Directory free space B+ tree
-|===
+=== Directory B+ tree branch node block
 
-==== Directory B+ tree block header signatures
+An attributes B+ tree branch node block consist of:
 
-[cols="1,5",options="header"]
-|===
-| Signature | Description
-| "XD2D" | Directory entries B+ tree
-| "XD2F" | Directory free space B+ tree
-| "XDD3" | File system version 5 Directory entries B+ tree
-| "XDF3" | File system version 5 Directory free space B+ tree
-|===
+* a <<directory_branch_node_block_header,directory branch node block header>>
+* array of directory branch node entry
 
-==== Directory B+ tree directory entries block
+===== [[directory_branch_node_block_header]]Directory branch node block header
 
-A directory B+ tree directory entries block (xfs_dir2_data_t) consist of:
-
-* an directory entries block header
-* array of used and unused directory entries
-
-[yellow-background]*TODO complete section*
-
-==== Directory entries B+ tree hash values block
-
-A directory entries B+ tree hash values block (xfs_dir2_leaf_entry_t) consist
-of:
-
-* a hash values block header
-* array of entries (xfs_dir2_leaf_entry_t)
-* array of entries (xfs_dir2_data_off_t)
-* a hash values block footer
-
-[yellow-background]*TODO complete section*
-
-===== Directory entries B+ tree hash values block header
-
-A hash values block header version 1 (xfs_da_blkinfo_t) is 12 bytes of size
-and consists of:
+A directory branch node block header is 16 bytes of size and consist of:
 
 [cols="1,1,1,5",options="header"]
 |===
 | Offset | Size | Value | Description
-| 0 | 4 | | (Logical) block number of the next B+ tree block at the same level
-| 4 | 4 | | (Logical) block number of the previous B+ tree block at the same level
-| 8 | 2 | 0xfbee | Signature (XFS_ATTR_LEAF_MAGIC)
-| 10 | 2 | | [yellow-background]*Unknown (padding)*
+| 0 | 12 | | <<file_system_block_header_version_1,File system block header version 1>>
+| 12 | 2 | | Number of entries
+| 14 | 2 | | Node level
 |===
 
-[yellow-background]*TODO describe xfs_dir2_leaf_entry_t and xfs_dir2_data_off_t*
+===== Directory B+ tree branch node block entry
 
-===== Directory entries B+ tree hash values block footer
-
-A hash values block footer version 2 (xfs_dir2_leaf_tail_t) is 4 bytes of size
-and consists of:
+A directory B+ tree branch node block entry is 8 bytes of size and consists of:
 
 [cols="1,1,1,5",options="header"]
 |===
 | Offset | Size | Value | Description
-| 0 | 4 | | [yellow-background]*Unknown (bestcount)*
+| 0 | 4 | | Name hash
+| 4 | 4 | | Sub block number +
+Contains a block number relative to the start of the attributes extents
 |===
 
 == Device identifier
@@ -1290,11 +1444,11 @@ attributes B+ trees.
 
 === [[file_system_block_header]]File system block header
 
-==== [[file_system_block_header_version_2]]File system block header version 2
+==== [[file_system_block_header_version_1]]File system block header version 1
 
-If the file system version <= 4 the file system block header version 2 is used.
-The file system block header version 2 (xfs_da_blkinfo_t) is 12 bytes of size
-and consist of:
+If the superblock format version <= 4 the file system block header version 1 is
+used. The file system block header version 1 (xfs_da_blkinfo_t) is 12 bytes of
+size and consist of:
 
 [cols="1,1,1,5",options="header"]
 |===
@@ -1305,11 +1459,14 @@ and consist of:
 | 10 | 2 | | [yellow-background]*Unknown (padding)*
 |===
 
+[NOTE]
+A file system block header version 2 is equivalent to version 1.
+
 ==== [[file_system_block_header_version_3]]File system block header version 3
 
-If the file system version >= 5 the file system block header version 3 is used.
-The file system block header version 3 (xfs_da3_blkinfo_t) is 56 bytes of size
-and consist of:
+If the superblock format version >= 5 the file system block header version 3 is
+used. The file system block header version 3 (xfs_da3_blkinfo_t) is 56 bytes of
+size and consist of:
 
 [cols="1,1,1,5",options="header"]
 |===
@@ -1338,6 +1495,7 @@ Contains the absolute inode number the block is part of
 | 0xd2ff | XFS_DIR2_LEAFN_MAGIC |
 | 0xfbee | XFS_ATTR_LEAF_MAGIC | Attributes B+ tree leaf block
 | 0xfebe | XFS_DA_NODE_MAGIC | Directory or attributes B+ tree branch block
+| 0xfeeb | XFS_DIR_LEAF_MAGIC | Directory B+ tree leaf block
 |===
 
 == Extended attributes
@@ -1355,7 +1513,7 @@ descriptor offset.
 === Short-form attributes table
 
 If the inode attributes fork type is XFS_DINODE_FMT_LOCAL the extended
-attributes are sorted in a short-form attributes table (xfs_attr_shortform)
+attributes are stored in a short-form attributes table (xfs_attr_shortform)
 inline in the attribtes fork. The short-form attributes table consist of:
 
 * a short-form attribute table header
@@ -1399,31 +1557,35 @@ Contains an ASCII string without end-of-string character
 === [[attributes_block]]Attributes (leaf) block
 
 If the inode attributes fork type is XFS_DINODE_FMT_EXTENTS the extended
-attributes are sorted in an attributes (leaf) block. The attributes fork
+attributes are stored in an attributes (leaf) block. The attributes fork
 contains an <<extent_list,extent list>>.
 
 An attributes (leaf) block (xfs_attr_leafblock_t or xfs_attr3_leafblock_t)
 consist of:
 
 * an <<attributes_leaf_block_header,attributes (leaf) block header>>
-* array of attributes block entries
+* array of block entries
 * array of local or remote attribute block values
 
 If more than one block is needed to store the extended attributes an
 <<attributes_btree,attributes B+ tree>> is used.
 
+[NOTE]
+Since extended attributes were introduced in superblock format version there
+are no version 1 structures.
+
 ==== [[attributes_leaf_block_header]]Attributes (leaf) block header
 
 ===== Attributes (leaf) block header version 2
 
-If the file system version <= 4 the attributes (leaf) block header version 2
+If the superblock format version <= 4 the attributes (leaf) block header version 2
 is used. The attributes (leaf) block header version 2 (xfs_attr_leaf_hdr_t) is
 32 bytes of size and consist of:
 
 [cols="1,1,1,5",options="header"]
 |===
 | Offset | Size | Value | Description
-| 0 | 12 | | <<file_system_block_version_2,File system block header version 2>>
+| 0 | 12 | | <<file_system_block_header_version_1,File system block header version 1>>
 | 12 | 2 | | Number of entries
 | 14 | 2 | | Used data size +
 Contains the number of bytes of the block data that is used
@@ -1436,14 +1598,14 @@ See section: <<block_free_region_v2,Block free region>>
 
 ===== Attributes (leaf) block header version 3
 
-If the file system version >= 5 the attributes (leaf) block header version 3
+If the superblock format version >= 5 the attributes (leaf) block header version 3
 is used. The attributes (leaf) block header version 3 (xfs_attr3_leaf_hdr_t) is
 80 bytes of size and consist of:
 
 [cols="1,1,1,5",options="header"]
 |===
 | Offset | Size | Value | Description
-| 0 | 56 | | <<file_system_block_version_3,File system block header version 3>>
+| 0 | 56 | | <<file_system_block_header_version_3,File system block header version 3>>
 | 56 | 2 | | Number of entries
 | 58 | 2 | | Used data size +
 Contains the number of bytes of the block data that is used
@@ -1511,7 +1673,7 @@ Contains an ASCII string without end-of-string character
 === [[attributes_btree]]Attributes B+ tree
 
 If the inode attributes fork type is XFS_DINODE_FMT_BTREE the extended
-attributes are sorted in an attributes B+ tree. The attributes fork
+attributes are stored in an attributes B+ tree. The attributes fork
 contains an <<extent_btree,extent B+ tree>>.
 
 The first block in the extents is the B+ tree root block.
@@ -1527,30 +1689,28 @@ An attributes B+ tree branch node block consist of:
 
 ===== Attributes branch node block header version 2
 
-If the file system version <= 4 the attributes branch node block header
+If the superblock format version <= 4 the attributes branch node block header
 version 2 is used. The attributes branch node block header version 2
 (xfs_da_blkinfo_t) is 16 bytes of size and consist of:
 
 [cols="1,1,1,5",options="header"]
 |===
 | Offset | Size | Value | Description
-| 0 | 12 | | <<file_system_block_version_2,File system block header version 2>>
-4+| _Branch block header version 2 (xfs_da_node_hdr_t)_
+| 0 | 12 | | <<file_system_block_header_version_1,File system block header version 1>>
 | 12 | 2 | | Number of entries
 | 14 | 2 | | Node level
 |===
 
 ===== Attributes branch node block header version 3
 
-If the file system version >= 5 the attributes branch node block header
+If the superblock format version >= 5 the attributes branch node block header
 version 3 is used. The attributes branch node block header version 3
 (xfs_da3_blkinfo_t) is 64 bytes of size and consist of:
 
 [cols="1,1,1,5",options="header"]
 |===
 | Offset | Size | Value | Description
-| 0 | 56 | | <<file_system_block_version_3,File system block header version 3>>
-4+| _Branch block header version 3 (xfs_da3_intnode_t)_
+| 0 | 56 | | <<file_system_block_header_version_3,File system block header version 3>>
 | 56 | 2 | | Number of entries
 | 58 | 2 | | Node level
 | 60 | 4 | | [yellow-background]*Unknown (padding)*
@@ -1582,16 +1742,17 @@ The attribute flags indicate the prefix (or namespace) of the attribute name.
 | 0x01 | XFS_ATTR_LOCAL | | The attribute value is contained within the current block
 | 0x02 | XFS_ATTR_ROOT | "trusted." | The attribute is part of the trusted namespace
 | 0x04 | XFS_ATTR_SECURE | "secure." | The attribute is part of the secure namespace
+| 0x08 | XFS_ATTR_PARENT | | The attribute contains a parent directory reference, where the attribute name contains the file tentry name and the attribute value data a <<parent_directory_attribute_value_data,reference to the parent directory>>.
 4+|
-| 0x80 | XFS_ATTR_INCOMPLETE | | This attribute is being modified
+| 0x80 | XFS_ATTR_INCOMPLETE | | The attribute is being modified
 |===
 
 ==== [[remote_attribute_value_data_block]]Remote attribute value data block
 
-If the file system version <= 4 the attribute value data is stored directly in
+If the superblock format version <= 4 the attribute value data is stored directly in
 remote attribute value date blocks.
 
-If the file system version >= 5 each individual remote attribute value data
+If the superblock format version >= 5 each individual remote attribute value data
 block will start with a remote attribute value data block header version 3
 followed by attribute value data.
 
@@ -1616,6 +1777,18 @@ Contains an UUID that should correspond to [yellow-background]*sb_uuid or sb_met
 Contains the absolute inode number the block is part of
 | 40 | 8 | | Block number
 | 48 | 8 | | Log sequence number
+|===
+
+===== [[parent_directory_attribute_value_data]]Parent directory attribute value data
+
+The parent directory attribute value data (xfs_parent_rec) is 12 bytes of size
+and consist of:
+
+[cols="1,1,1,5",options="header"]
+|===
+| Offset | Size | Value | Description
+| 0 | 8 | | Parent directory inode number
+| 8 | 4 | | Parent directory generation number
 |===
 
 :numbered!:

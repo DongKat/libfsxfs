@@ -1,7 +1,7 @@
 /*
  * Library file_entry type test program
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -127,6 +127,14 @@ int main(
 	/* TODO: add tests for libfsxfs_file_entry_get_utf16_name_size */
 
 	/* TODO: add tests for libfsxfs_file_entry_get_utf16_name */
+
+	/* TODO: add tests for libfsxfs_file_entry_get_utf8_symbolic_link_target_size */
+
+	/* TODO: add tests for libfsxfs_file_entry_get_utf8_symbolic_link_target */
+
+	/* TODO: add tests for libfsxfs_file_entry_get_utf16_symbolic_link_target_size */
+
+	/* TODO: add tests for libfsxfs_file_entry_get_utf16_symbolic_link_target */
 
 	/* TODO: add tests for libfsxfs_file_entry_get_number_of_sub_file_entries */
 

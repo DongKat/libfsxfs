@@ -1,7 +1,7 @@
 /*
  * Mounts a X File System (XFS) volume.
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -26,6 +26,10 @@
 #include <types.h>
 
 #include <stdio.h>
+
+#if defined( HAVE_FCNTL_H ) || defined( WINAPI )
+#include <fcntl.h>
+#endif
 
 #if defined( HAVE_IO_H ) || defined( WINAPI )
 #include <io.h>
@@ -54,31 +58,6 @@
 
 mount_handle_t *fsxfsmount_mount_handle = NULL;
 int fsxfsmount_abort                    = 0;
-
-/* Prints usage information
- */
-void usage_fprint(
-      FILE *stream )
-{
-	if( stream == NULL )
-	{
-		return;
-	}
-	fprintf( stream, "Use fsxfsmount to mount a X File System (XFS) volume\n\n" );
-
-	fprintf( stream, "Usage: fsxfsmount [ -o offset ] [ -X extended_options ] [ -hvV ] volume\n"
-	                 "                  mount_point\n\n" );
-
-	fprintf( stream, "\tvolume:      a X File System (XFS) volume\n\n" );
-	fprintf( stream, "\tmount_point: the directory to serve as mount point\n\n" );
-
-	fprintf( stream, "\t-h:          shows this help\n" );
-	fprintf( stream, "\t-o:          specify the volume offset in bytes\n" );
-	fprintf( stream, "\t-v:          verbose output to stderr, while fsxfsmount will remain running in the\n"
-	                 "\t             foreground\n" );
-	fprintf( stream, "\t-V:          print version\n" );
-	fprintf( stream, "\t-X:          extended options to pass to sub system\n" );
-}
 
 /* Signal handler for fsxfsmount
  */
@@ -132,18 +111,39 @@ int wmain( int argc, wchar_t * const argv[] )
 int main( int argc, char * const argv[] )
 #endif
 {
+	const char *description = \
+		"Use fsxfsmount to mount a X File System (XFS) volume.";
+
+	fsxfstools_option_t options[ ] = {
+		{ 'h', NULL, "shows this help" },
+		{ 'o', "offset", "specify the volume offset in bytes" },
+		{ 'v', NULL, "verbose output to stderr, while fsxfsmount will remain running in the foreground" },
+		{ 'V', NULL, "print version" },
+#if defined( HAVE_LIBFUSE ) || defined( HAVE_LIBFUSE3 ) || defined( HAVE_LIBOSXFUSE )
+		{ 'X', "extended_options", "extended options to pass to sub system" },
+#endif
+		{ 0, "volume", "a X File System (XFS) volume" },
+		{ 0, "mount_point", "the directory to serve as mount point" },
+	};
+	system_character_t options_string[ 32 ];
+
 	libfsxfs_error_t *error                     = NULL;
-	system_character_t *mount_point             = NULL;
-	system_character_t *option_extended_options = NULL;
 	system_character_t *option_offset           = NULL;
 	system_character_t *source                  = NULL;
 	char *program                               = "fsxfsmount";
 	system_integer_t option                     = 0;
-	int result                                  = 0;
+	int number_of_options                       = (int) ( sizeof( options ) / sizeof( fsxfstools_option_t ) );
 	int verbose                                 = 0;
+
+#if defined( HAVE_LIBFUSE ) || defined( HAVE_LIBFUSE3 ) || defined( HAVE_LIBOSXFUSE ) || defined( HAVE_LIBDOKAN )
+	system_character_t *mount_point             = NULL;
+	int result                                  = 0;
+#endif
 
 #if defined( HAVE_LIBFUSE ) || defined( HAVE_LIBFUSE3 ) || defined( HAVE_LIBOSXFUSE )
 	struct fuse_operations fsxfsmount_fuse_operations;
+
+	system_character_t *option_extended_options = NULL;
 
 #if defined( HAVE_LIBFUSE3 )
 	/* Need to set this to 1 even if there no arguments, otherwise this causes
@@ -160,6 +160,11 @@ int main( int argc, char * const argv[] )
 #elif defined( HAVE_LIBDOKAN )
 	DOKAN_OPERATIONS fsxfsmount_dokan_operations;
 	DOKAN_OPTIONS fsxfsmount_dokan_options;
+#endif
+
+#if defined( __MINGW32__ ) && defined( HAVE_MINGW_BINMODE )
+	_setmode( _fileno( stdout ), _O_BINARY );
+	_setmode( _fileno( stderr ), _O_BINARY );
 #endif
 
 	libcnotify_stream_set(
@@ -192,10 +197,22 @@ int main( int argc, char * const argv[] )
 	 stdout,
 	 program );
 
+	if( fsxfstools_getopt_get_options_string(
+	     options,
+	     number_of_options,
+	     options_string,
+	     32 ) != 1 )
+	{
+		fprintf(
+		 stderr,
+		 "Unable to determine options string.\n" );
+
+		goto on_error;
+	}
 	while( ( option = fsxfstools_getopt(
 	                   argc,
 	                   argv,
-	                   _SYSTEM_STRING( "ho:vVX:" ) ) ) != (system_integer_t) -1 )
+	                   options_string ) ) != (system_integer_t) -1 )
 	{
 		switch( option )
 		{
@@ -206,14 +223,22 @@ int main( int argc, char * const argv[] )
 				 "Invalid argument: %" PRIs_SYSTEM "\n",
 				 argv[ optind - 1 ] );
 
-				usage_fprint(
-				 stdout );
+				fsxfstools_getopt_usage_fprint(
+				 stdout,
+				 program,
+				 description,
+				 options,
+				 number_of_options );
 
 				return( EXIT_FAILURE );
 
 			case (system_integer_t) 'h':
-				usage_fprint(
-				 stdout );
+				fsxfstools_getopt_usage_fprint(
+				 stdout,
+				 program,
+				 description,
+				 options,
+				 number_of_options );
 
 				return( EXIT_SUCCESS );
 
@@ -233,10 +258,12 @@ int main( int argc, char * const argv[] )
 
 				return( EXIT_SUCCESS );
 
+#if defined( HAVE_LIBFUSE ) || defined( HAVE_LIBFUSE3 ) || defined( HAVE_LIBOSXFUSE )
 			case (system_integer_t) 'X':
 				option_extended_options = optarg;
 
 				break;
+#endif
 		}
 	}
 	if( optind == argc )
@@ -245,8 +272,12 @@ int main( int argc, char * const argv[] )
 		 stderr,
 		 "Missing source volume.\n" );
 
-		usage_fprint(
-		 stdout );
+		fsxfstools_getopt_usage_fprint(
+		 stdout,
+		 program,
+		 description,
+		 options,
+		 number_of_options );
 
 		return( EXIT_FAILURE );
 	}
@@ -258,13 +289,18 @@ int main( int argc, char * const argv[] )
 		 stderr,
 		 "Missing mount point.\n" );
 
-		usage_fprint(
-		 stdout );
+		fsxfstools_getopt_usage_fprint(
+		 stdout,
+		 program,
+		 description,
+		 options,
+		 number_of_options );
 
 		return( EXIT_FAILURE );
 	}
+#if defined( HAVE_LIBFUSE ) || defined( HAVE_LIBFUSE3 ) || defined( HAVE_LIBOSXFUSE ) || defined( HAVE_LIBDOKAN )
 	mount_point = argv[ optind ];
-
+#endif
 	libcnotify_verbose_set(
 	 verbose );
 	libfsxfs_notify_set_stream(
@@ -452,6 +488,9 @@ int main( int argc, char * const argv[] )
 
 		goto on_error;
 	}
+	fuse_unmount(
+	 fsxfsmount_fuse_handle );
+
 	fuse_destroy(
 	 fsxfsmount_fuse_handle );
 

@@ -1,7 +1,7 @@
 /*
  * Short-form directory table header functions
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -25,6 +25,7 @@
 #include <common.h>
 #include <types.h>
 
+#include "libfsxfs_io_handle.h"
 #include "libfsxfs_libcerror.h"
 
 #if defined( __cplusplus )
@@ -58,6 +59,7 @@ int libfsxfs_directory_table_header_free(
 
 int libfsxfs_directory_table_header_read_data(
      libfsxfs_directory_table_header_t *directory_table_header,
+     libfsxfs_io_handle_t *io_handle,
      const uint8_t *data,
      size_t data_size,
      libcerror_error_t **error );

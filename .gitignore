@@ -1,6 +1,6 @@
 # Files to ignore by git
 #
-# Version: 20231119
+# Version: 20260604
 
 # Generic auto-generated build files
 *~
@@ -127,28 +127,36 @@ stamp-h[1-9]
 /libfsxfs.spec
 /libfsxfs/libfsxfs.rc
 /libfsxfs/libfsxfs_definitions.h
-/setup.cfg
+/pyproject.toml
 /fsxfstools/*.exe
 /fsxfstools/fsxfsinfo
 /fsxfstools/fsxfsmount
 /fsxfstools/xfs_extract
+/tests/*.dir
 /tests/*.exe
+/tests/*.log
+/tests/*.tmp
+/tests/atconfig
+/tests/atlocal
 /tests/fsxfs_test_attribute_values
+/tests/fsxfs_test_attributes
 /tests/fsxfs_test_attributes_leaf_block_header
 /tests/fsxfs_test_attributes_table
 /tests/fsxfs_test_attributes_table_header
+/tests/fsxfs_test_block_directory
 /tests/fsxfs_test_block_directory_footer
 /tests/fsxfs_test_block_directory_header
 /tests/fsxfs_test_btree_block
 /tests/fsxfs_test_btree_header
 /tests/fsxfs_test_buffer_data_handle
 /tests/fsxfs_test_directory_entry
+/tests/fsxfs_test_directory_table
 /tests/fsxfs_test_directory_table_header
 /tests/fsxfs_test_error
 /tests/fsxfs_test_extent
 /tests/fsxfs_test_file_entry
+/tests/fsxfs_test_file_system_block
 /tests/fsxfs_test_file_system_block_header
-/tests/fsxfs_test_inode
 /tests/fsxfs_test_inode_btree
 /tests/fsxfs_test_inode_btree_record
 /tests/fsxfs_test_inode_information
@@ -163,6 +171,12 @@ stamp-h[1-9]
 /tests/fsxfs_test_volume
 /tests/input
 /tests/notify_stream.log
+/tests/package.m4
+/tests/test_inputs_*.at
+/tests/test_library
+/tests/test_manpages
+/tests/test_python_module
+/tests/test_tools
 /tests/tmp*
 
 # Local library dependencies specific files

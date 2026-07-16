@@ -1,7 +1,7 @@
 /*
  * Attributes leaf attributes leaf block header functions
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -236,19 +236,19 @@ int libfsxfs_attributes_leaf_block_header_read_data(
 
 		byte_stream_copy_to_uint16_big_endian(
 		 ( (fsxfs_attributes_leaf_block_header_v2_t *) data )->used_data_size,
-		 value_32bit );
+		 value_16bit );
 		libcnotify_printf(
 		 "%s: used data size\t\t: %" PRIu16 "\n",
 		 function,
-		 value_32bit );
+		 value_16bit );
 
 		byte_stream_copy_to_uint16_big_endian(
 		 ( (fsxfs_attributes_leaf_block_header_v2_t *) data )->used_data_offset,
-		 value_32bit );
+		 value_16bit );
 		libcnotify_printf(
 		 "%s: used data offset\t: %" PRIu16 "\n",
 		 function,
-		 value_32bit );
+		 value_16bit );
 
 		libcnotify_printf(
 		 "%s: block compaction flag\t: 0x%02" PRIx8 "\n",

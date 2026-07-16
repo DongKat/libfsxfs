@@ -1,7 +1,7 @@
 /*
  * Memory allocation functions for testing
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -35,18 +35,11 @@
 
 #if defined( HAVE_FSXFS_TEST_MEMORY )
 
-static void *(*fsxfs_test_real_malloc)(size_t)                       = NULL;
-static void *(*fsxfs_test_real_memcpy)(void *, const void *, size_t) = NULL;
-static void *(*fsxfs_test_real_memset)(void *, int, size_t)          = NULL;
-static void *(*fsxfs_test_real_realloc)(void *, size_t)              = NULL;
-
-int fsxfs_test_malloc_attempts_before_fail                           = -1;
-int fsxfs_test_memcpy_attempts_before_fail                           = -1;
-int fsxfs_test_memset_attempts_before_fail                           = -1;
-int fsxfs_test_realloc_attempts_before_fail                          = -1;
+static void *(*fsxfs_test_real_malloc)(size_t) = NULL;
+int fsxfs_test_malloc_attempts_before_fail     = -1;
 
 /* Custom malloc for testing memory error cases
- * Note this function might fail if compiled with optimation
+ * Note this function might fail if compiled with optimization
  * Returns a pointer to newly allocated data or NULL
  */
 void *malloc(
@@ -59,6 +52,11 @@ void *malloc(
 		fsxfs_test_real_malloc = dlsym(
 		                          RTLD_NEXT,
 		                          "malloc" );
+
+		if( fsxfs_test_real_malloc == NULL )
+		{
+			return( NULL );
+		}
 	}
 	if( fsxfs_test_malloc_attempts_before_fail == 0 )
 	{
@@ -76,8 +74,11 @@ void *malloc(
 	return( ptr );
 }
 
+static void *(*fsxfs_test_real_memcpy)(void *, const void *, size_t) = NULL;
+int fsxfs_test_memcpy_attempts_before_fail                           = -1;
+
 /* Custom memcpy for testing memory error cases
- * Note this function might fail if compiled with optimation and as a shared libary
+ * Note this function might fail if compiled with optimization and as a shared library
  * Returns a pointer to newly allocated data or NULL
  */
 void *memcpy(
@@ -90,6 +91,11 @@ void *memcpy(
 		fsxfs_test_real_memcpy = dlsym(
 		                          RTLD_NEXT,
 		                          "memcpy" );
+
+		if( fsxfs_test_real_memcpy == NULL )
+		{
+			return( NULL );
+		}
 	}
 	if( fsxfs_test_memcpy_attempts_before_fail == 0 )
 	{
@@ -109,8 +115,11 @@ void *memcpy(
 	return( destination );
 }
 
+static void *(*fsxfs_test_real_memset)(void *, int, size_t) = NULL;
+int fsxfs_test_memset_attempts_before_fail                  = -1;
+
 /* Custom memset for testing memory error cases
- * Note this function might fail if compiled with optimation and as a shared libary
+ * Note this function might fail if compiled with optimization and as a shared library
  * Returns a pointer to newly allocated data or NULL
  */
 void *memset(
@@ -123,6 +132,11 @@ void *memset(
 		fsxfs_test_real_memset = dlsym(
 		                          RTLD_NEXT,
 		                          "memset" );
+
+		if( fsxfs_test_real_memset == NULL )
+		{
+			return( NULL );
+		}
 	}
 	if( fsxfs_test_memset_attempts_before_fail == 0 )
 	{
@@ -142,8 +156,11 @@ void *memset(
 	return( ptr );
 }
 
+static void *(*fsxfs_test_real_realloc)(void *, size_t) = NULL;
+int fsxfs_test_realloc_attempts_before_fail             = -1;
+
 /* Custom realloc for testing memory error cases
- * Note this function might fail if compiled with optimation
+ * Note this function might fail if compiled with optimization
  * Returns a pointer to reallocated data or NULL
  */
 void *realloc(
@@ -155,6 +172,11 @@ void *realloc(
 		fsxfs_test_real_realloc = dlsym(
 		                           RTLD_NEXT,
 		                           "realloc" );
+
+		if( fsxfs_test_real_realloc == NULL )
+		{
+			return( NULL );
+		}
 	}
 	if( fsxfs_test_realloc_attempts_before_fail == 0 )
 	{

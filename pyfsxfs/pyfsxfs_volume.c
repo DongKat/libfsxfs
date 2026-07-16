@@ -1,7 +1,7 @@
 /*
  * Python object wrapper of libfsxfs_volume_t
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -95,7 +95,7 @@ PyMethodDef pyfsxfs_volume_object_methods[] = {
 	{ "get_root_directory",
 	  (PyCFunction) pyfsxfs_volume_get_root_directory,
 	  METH_NOARGS,
-	  "get_root_directory() -> Object\n"
+	  "get_root_directory() -> Object or None\n"
 	  "\n"
 	  "Retrieves the root directory file entry." },
 
@@ -396,16 +396,16 @@ PyObject *pyfsxfs_volume_open(
            PyObject *arguments,
            PyObject *keywords )
 {
-	PyObject *string_object     = NULL;
-	libcerror_error_t *error    = NULL;
-	const char *filename_narrow = NULL;
-	static char *function       = "pyfsxfs_volume_open";
-	static char *keyword_list[] = { "filename", "mode", NULL };
-	char *mode                  = NULL;
-	int result                  = 0;
+	PyObject *string_object      = NULL;
+	libcerror_error_t *error     = NULL;
+	const char *filename_narrow  = NULL;
+	static char *function        = "pyfsxfs_volume_open";
+	static char *keyword_list[]  = { "filename", "mode", NULL };
+	char *mode                   = NULL;
+	int result                   = 0;
 
 #if defined( HAVE_WIDE_SYSTEM_CHARACTER )
-	const wchar_t *filename_wide = NULL;
+	wchar_t *filename_wide       = NULL;
 #else
 	PyObject *utf8_string_object = NULL;
 #endif

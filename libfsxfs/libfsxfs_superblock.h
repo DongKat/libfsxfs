@@ -1,7 +1,7 @@
 /*
  * Superblock functions
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -89,6 +89,22 @@ struct libfsxfs_superblock
 	/* Secondary feature flags
 	 */
 	uint32_t secondary_feature_flags;
+
+	/* Compatible features flags
+	 */
+	uint32_t compatible_features_flags;
+
+	/* Read only compatible features flags
+	 */
+	uint32_t read_only_compatible_features_flags;
+
+	/* Incompatible features flags
+	 */
+	uint32_t incompatible_features_flags;
+
+	/* Journal incompatible features flags
+	 */
+	uint32_t journal_incompatible_features_flags;
 
 	/* Number of bits used for the relative block number
 	 */

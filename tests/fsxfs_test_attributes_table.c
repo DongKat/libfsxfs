@@ -1,7 +1,7 @@
 /*
  * Library attributes_table type test program
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -506,6 +506,13 @@ on_error:
 	{
 		libcerror_error_free(
 		 &error );
+	}
+	if( extended_attributes_array != NULL )
+	{
+		libcdata_array_free(
+		 &extended_attributes_array,
+		 (int (*)(intptr_t **, libcerror_error_t **)) &libfsxfs_attribute_values_free,
+		 NULL );
 	}
 	if( attributes_table != NULL )
 	{

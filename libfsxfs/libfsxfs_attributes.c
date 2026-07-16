@@ -1,7 +1,7 @@
 /*
  * (Extended) attributes functions
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -80,6 +80,28 @@ int libfsxfs_attributes_read_branch_values(
 
 		return( -1 );
 	}
+	if( data == NULL )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+		 LIBCERROR_ARGUMENT_ERROR_INVALID_VALUE,
+		 "%s: invalid data.",
+		 function );
+
+		return( -1 );
+	}
+	if( data_size > (size_t) SSIZE_MAX )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+		 LIBCERROR_ARGUMENT_ERROR_VALUE_OUT_OF_BOUNDS,
+		 "%s: invalid data size value out of bounds.",
+		 function );
+
+		return( -1 );
+	}
 	if( io_handle->format_version == 5 )
 	{
 		data_offset             = sizeof( fsxfs_file_system_block_header_v3_t );
@@ -87,7 +109,7 @@ int libfsxfs_attributes_read_branch_values(
 	}
 	else
 	{
-		data_offset             = sizeof( fsxfs_file_system_block_header_v2_t );
+		data_offset             = sizeof( fsxfs_file_system_block_header_v1_t );
 		branch_header_data_size = sizeof( fsxfs_attributes_branch_block_header_v2_t );
 	}
 	if( ( data_offset >= data_size )
@@ -115,39 +137,39 @@ int libfsxfs_attributes_read_branch_values(
 	}
 #endif /* defined( HAVE_DEBUG_OUTPUT ) */
 
-		byte_stream_copy_to_uint16_big_endian(
-		 ( (fsxfs_attributes_branch_block_header_v2_t *) &( data[ data_offset ] ) )->number_of_entries,
-		 number_of_entries );
+	byte_stream_copy_to_uint16_big_endian(
+	 ( (fsxfs_attributes_branch_block_header_v2_t *) &( data[ data_offset ] ) )->number_of_entries,
+	 number_of_entries );
 
 #if defined( HAVE_DEBUG_OUTPUT )
-		if( libcnotify_verbose != 0 )
+	if( libcnotify_verbose != 0 )
+	{
+		libcnotify_printf(
+		 "%s: number of entries\t\t: %" PRIu16 "\n",
+		 function,
+		 number_of_entries );
+
+		byte_stream_copy_to_uint16_big_endian(
+		 ( (fsxfs_attributes_branch_block_header_v2_t *) &( data[ data_offset ] ) )->node_level,
+		 value_16bit );
+		libcnotify_printf(
+		 "%s: node level\t\t\t: %" PRIu16 "\n",
+		 function,
+		 value_16bit );
+
+		if( io_handle->format_version == 5 )
 		{
+			byte_stream_copy_to_uint32_big_endian(
+			 ( (fsxfs_attributes_branch_block_header_v3_t *) &( data[ data_offset ] ) )->unknown1,
+			 value_32bit );
 			libcnotify_printf(
-			 "%s: number of entries\t\t: %" PRIu16 "\n",
+			 "%s: unknown1\t\t\t: 0x%08" PRIx32 "\n",
 			 function,
-			 number_of_entries );
-
-			byte_stream_copy_to_uint16_big_endian(
-			 ( (fsxfs_attributes_branch_block_header_v2_t *) &( data[ data_offset ] ) )->node_level,
-			 value_16bit );
-			libcnotify_printf(
-			 "%s: node level\t\t\t: %" PRIu16 "\n",
-			 function,
-			 value_16bit );
-
-			if( io_handle->format_version == 5 )
-			{
-				byte_stream_copy_to_uint32_big_endian(
-				 ( (fsxfs_attributes_branch_block_header_v3_t *) &( data[ data_offset ] ) )->unknown1,
-				 value_32bit );
-				libcnotify_printf(
-				 "%s: unknown1\t\t\t: 0x%08" PRIx32 "\n",
-				 function,
-				 value_32bit );
-			}
-			libcnotify_printf(
-			 "\n" );
+			 value_32bit );
 		}
+		libcnotify_printf(
+		 "\n" );
+	}
 #endif /* defined( HAVE_DEBUG_OUTPUT ) */
 
 	data_offset += branch_header_data_size;
@@ -169,7 +191,7 @@ int libfsxfs_attributes_read_branch_values(
 	if( libcnotify_verbose != 0 )
 	{
 		libcnotify_printf(
-		 "%s: attribute branch entries data:\n",
+		 "%s: branch entries data:\n",
 		 function );
 		libcnotify_print_data(
 		 &( data[ data_offset ] ),
@@ -209,7 +231,7 @@ int libfsxfs_attributes_read_branch_values(
 
 		data_offset += sizeof( fsxfs_attributes_branch_block_entry_t );
 
-		if( libfsxfs_attributes_get_from_block(
+		if( libfsxfs_attributes_read_from_block(
 		     io_handle,
 		     file_io_handle,
 		     inode,
@@ -270,13 +292,35 @@ int libfsxfs_attributes_read_leaf_values(
 
 		return( -1 );
 	}
+	if( data == NULL )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+		 LIBCERROR_ARGUMENT_ERROR_INVALID_VALUE,
+		 "%s: invalid data.",
+		 function );
+
+		return( -1 );
+	}
+	if( data_size > (size_t) SSIZE_MAX )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+		 LIBCERROR_ARGUMENT_ERROR_VALUE_OUT_OF_BOUNDS,
+		 "%s: invalid data size value out of bounds.",
+		 function );
+
+		return( -1 );
+	}
 	if( io_handle->format_version == 5 )
 	{
 		data_offset = sizeof( fsxfs_file_system_block_header_v3_t );
 	}
 	else
 	{
-		data_offset = sizeof( fsxfs_file_system_block_header_v2_t );
+		data_offset = sizeof( fsxfs_file_system_block_header_v1_t );
 	}
 	if( data_offset >= data_size )
 	{
@@ -343,7 +387,7 @@ int libfsxfs_attributes_read_leaf_values(
 	if( libcnotify_verbose != 0 )
 	{
 		libcnotify_printf(
-		 "%s: attribute leaf entries data:\n",
+		 "%s: leaf block entries data:\n",
 		 function );
 		libcnotify_print_data(
 		 &( data[ data_offset ] ),
@@ -376,8 +420,9 @@ int libfsxfs_attributes_read_leaf_values(
 			 value_32bit );
 
 			libcnotify_printf(
-			 "%s: values offset\t\t\t: %" PRIu16 "\n",
+			 "%s: values offset\t\t\t: %" PRIu16 " (0x%04" PRIx16 ")\n",
 			 function,
+			 values_offset,
 			 values_offset );
 
 			libcnotify_printf(
@@ -516,7 +561,7 @@ int libfsxfs_attributes_read_leaf_values(
 			if( libfsxfs_attribute_values_set_name(
 			     attribute_values,
 			     &( data[ values_offset ] ),
-			     name_size,
+			     (size_t) name_size,
 			     flags,
 			     error ) != 1 )
 			{
@@ -606,22 +651,42 @@ int libfsxfs_attributes_read_leaf_values(
 				}
 			}
 		}
-		if( libcdata_array_append_entry(
-		     extended_attributes_array,
-		     &entry_index,
-		     (intptr_t *) attribute_values,
-		     error ) != 1 )
+		if( ( flags & 0x08 ) != 0 )
 		{
-			libcerror_error_set(
-			 error,
-			 LIBCERROR_ERROR_DOMAIN_RUNTIME,
-			 LIBCERROR_RUNTIME_ERROR_APPEND_FAILED,
-			 "%s: unable to append attribute values to extended attributes array.",
-			 function );
+			if( libfsxfs_attribute_values_free(
+			     &attribute_values,
+			     error ) != 1 )
+			{
+				libcerror_error_set(
+				 error,
+				 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+				 LIBCERROR_RUNTIME_ERROR_FINALIZE_FAILED,
+				 "%s: unable to free attribute: %d values.",
+				 function,
+				 block_entry_index );
 
-			goto on_error;
+				goto on_error;
+			}
 		}
-		attribute_values = NULL;
+		else
+		{
+			if( libcdata_array_append_entry(
+			     extended_attributes_array,
+			     &entry_index,
+			     (intptr_t *) attribute_values,
+			     error ) != 1 )
+			{
+				libcerror_error_set(
+				 error,
+				 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+				 LIBCERROR_RUNTIME_ERROR_APPEND_FAILED,
+				 "%s: unable to append attribute values to extended attributes array.",
+				 function );
+
+				goto on_error;
+			}
+			attribute_values = NULL;
+		}
 	}
 	if( libfsxfs_attributes_leaf_block_header_free(
 	     &leaf_block_header,
@@ -659,10 +724,10 @@ on_error:
 	return( -1 );
 }
 
-/* Retrieves the extended attributes from an attributes block
+/* Reads the extended attributes from an attributes block
  * Returns 1 if successful or -1 on error
  */
-int libfsxfs_attributes_get_from_block(
+int libfsxfs_attributes_read_from_block(
      libfsxfs_io_handle_t *io_handle,
      libbfio_handle_t *file_io_handle,
      libfsxfs_inode_t *inode,
@@ -673,7 +738,7 @@ int libfsxfs_attributes_get_from_block(
 {
 	libfsxfs_extent_t *extent                       = NULL;
 	libfsxfs_file_system_block_t *file_system_block = NULL;
-	static char *function                           = "libfsxfs_attributes_get_from_block";
+	static char *function                           = "libfsxfs_attributes_read_from_block";
 	off64_t block_offset                            = 0;
 	uint64_t relative_block_number                  = 0;
 	int allocation_group_index                      = 0;
@@ -919,10 +984,10 @@ on_error:
 	return( -1 );
 }
 
-/* Retrieves the extended attributes from the inode
+/* Reads the extended attributes from the inode
  * Returns 1 if successful or -1 on error
  */
-int libfsxfs_attributes_get_from_inode(
+int libfsxfs_attributes_read_from_inode(
      libfsxfs_io_handle_t *io_handle,
      libbfio_handle_t *file_io_handle,
      libfsxfs_inode_t *inode,
@@ -930,7 +995,7 @@ int libfsxfs_attributes_get_from_inode(
      libcerror_error_t **error )
 {
 	libfsxfs_attributes_table_t *attributes_table = NULL;
-	static char *function                         = "libfsxfs_attributes_get_from_inode";
+	static char *function                         = "libfsxfs_attributes_read_from_inode";
 
 	if( io_handle == NULL )
 	{
@@ -1027,7 +1092,7 @@ int libfsxfs_attributes_get_from_inode(
 	}
 	else if( inode->attributes_extents_array != NULL )
 	{
-		if( libfsxfs_attributes_get_from_block(
+		if( libfsxfs_attributes_read_from_block(
 		     io_handle,
 		     file_io_handle,
 		     inode,
@@ -1038,9 +1103,9 @@ int libfsxfs_attributes_get_from_inode(
 		{
 			libcerror_error_set(
 			 error,
-			 LIBCERROR_ERROR_DOMAIN_RUNTIME,
-			 LIBCERROR_RUNTIME_ERROR_GET_FAILED,
-			 "%s: unable to retrieve extended attributes from attributes block: 0.",
+			 LIBCERROR_ERROR_DOMAIN_IO,
+			 LIBCERROR_IO_ERROR_READ_FAILED,
+			 "%s: unable to read extended attributes from attributes block: 0.",
 			 function );
 
 			goto on_error;

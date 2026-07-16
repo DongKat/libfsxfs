@@ -1,7 +1,7 @@
 /*
- * Library to support the X File System (XFS) format
+ * Library to access the X File System (XFS) format
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -37,6 +37,8 @@
 #pragma managed( push, off )
 #endif
 
+/* LCOV_EXCL_START */
+
 /* Defines the entry point for the DLL
  */
 BOOL WINAPI DllMain(
@@ -64,6 +66,8 @@ BOOL WINAPI DllMain(
 	}
 	return( TRUE );
 }
+
+/* LCOV_EXCL_STOP */
 
 /* Function that indicates the library is a DLL
  * Returns 1

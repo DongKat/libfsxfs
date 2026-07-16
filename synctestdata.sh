@@ -1,18 +1,18 @@
 #!/bin/sh
 # Script that synchronizes the local test data
-#
-# Version: 20251208
 
-TEST_SET="public";
-TEST_INPUT_DIRECTORY="tests/input";
-TEST_FILES="xfs.raw";
+TESTS_INPUT_DIRECTORY="tests/input"
+TEST_SET="public"
+TEST_FILES="xfs.raw"
 
-mkdir -p "${TEST_INPUT_DIRECTORY}/${TEST_SET}";
+mkdir -p "${TESTS_INPUT_DIRECTORY}/.fsxfsinfo_fs"
+echo "-H" > "${TESTS_INPUT_DIRECTORY}/.fsxfsinfo_fs/options"
 
-for TEST_FILE in ${TEST_FILES};
+mkdir -p "${TESTS_INPUT_DIRECTORY}/${TEST_SET}"
+
+for TEST_FILE in ${TEST_FILES}
 do
-	URL="https://github.com/log2timeline/dfvfs/raw/refs/heads/main/test_data/${TEST_FILE}";
+	URL="https://raw.githubusercontent.com/log2timeline/dfvfs/refs/heads/main/test_data/${TEST_FILE}"
 
-	curl -L -o "${TEST_INPUT_DIRECTORY}/${TEST_SET}/${TEST_FILE}" ${URL};
+	curl -L -o "${TESTS_INPUT_DIRECTORY}/${TEST_SET}/${TEST_FILE}" ${URL}
 done
-

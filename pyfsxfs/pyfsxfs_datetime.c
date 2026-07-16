@@ -1,7 +1,7 @@
 /*
  * Date and time functions
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -298,7 +298,7 @@ PyObject *pyfsxfs_datetime_new_from_filetime(
 	uint8_t minutes           = 0;
 	uint8_t seconds           = 0;
 
-	/* The timestamp is in units of 100 nano seconds correct the value to seconds
+	/* The timestamp is in units of 100 nanoseconds correct the value to seconds
 	 */
 	micro_seconds = (uint32_t) ( filetime % 10000000 ) / 10;
 	filetime      /= 10000000;

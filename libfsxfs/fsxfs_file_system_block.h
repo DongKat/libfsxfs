@@ -1,7 +1,7 @@
 /*
  * File system block structures of the X File System (XFS)
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -29,9 +29,9 @@
 extern "C" {
 #endif
 
-typedef struct fsxfs_file_system_block_header_v2 fsxfs_file_system_block_header_v2_t;
+typedef struct fsxfs_file_system_block_header_v1 fsxfs_file_system_block_header_v1_t;
 
-struct fsxfs_file_system_block_header_v2
+struct fsxfs_file_system_block_header_v1
 {
 	/* Next block number
 	 * Consists of 4 bytes

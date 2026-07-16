@@ -1,7 +1,7 @@
 /*
  * Input/Output (IO) handle functions
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -36,13 +36,29 @@ typedef struct libfsxfs_io_handle libfsxfs_io_handle_t;
 
 struct libfsxfs_io_handle
 {
+	/* The volume size
+	 */
+	size64_t volume_size;
+
 	/* The format version
 	 */
 	int format_version;
 
+	/* Feature flags
+	 */
+	uint16_t feature_flags;
+
 	/* Secondary feature flags
 	 */
 	uint32_t secondary_feature_flags;
+
+	/* The read-only compatible features flags
+	 */
+	uint32_t read_only_compatible_features_flags;
+
+	/* The incompatible features flags
+	 */
+	uint32_t incompatible_features_flags;
 
 	/* The block size
 	 */

@@ -1,7 +1,7 @@
 /*
  * Superblock functions
  *
- * Copyright (C) 2020-2025, Joachim Metz <joachim.metz@gmail.com>
+ * Copyright (C) 2020-2026, Joachim Metz <joachim.metz@gmail.com>
  *
  * Refer to AUTHORS for acknowledgements.
  *
@@ -341,27 +341,59 @@ int libfsxfs_superblock_read_data(
 		 function,
 		 superblock->journal_block_number );
 
-		libcnotify_printf(
-		 "%s: root directory inode number\t\t: %" PRIu64 "\n",
-		 function,
-		 superblock->root_directory_inode_number );
-
+		if( superblock->root_directory_inode_number == 0xffffffffffffffffUL )
+		{
+			libcnotify_printf(
+			 "%s: root directory inode number\t\t: %" PRIi64 " (0x%08" PRIx64 ")\n",
+			 function,
+			 (int64_t) superblock->root_directory_inode_number,
+			 superblock->root_directory_inode_number );
+		}
+		else
+		{
+			libcnotify_printf(
+			 "%s: root directory inode number\t\t: %" PRIu64 "\n",
+			 function,
+			 superblock->root_directory_inode_number );
+		}
 		byte_stream_copy_to_uint64_big_endian(
 		 ( (fsxfs_superblock_t *) data )->realtime_bitmap_extents_inode_number,
 		 value_64bit );
-		libcnotify_printf(
-		 "%s: real-time bitmap extents inode number\t: %" PRIu64 "\n",
-		 function,
-		 value_64bit );
 
+		if( value_64bit == 0xffffffffffffffffUL )
+		{
+			libcnotify_printf(
+			 "%s: real-time bitmap extents inode number\t: %" PRIi64 " (0x%08" PRIx64 ")\n",
+			 function,
+			 (int64_t) value_64bit,
+			 value_64bit );
+		}
+		else
+		{
+			libcnotify_printf(
+			 "%s: real-time bitmap extents inode number\t: %" PRIu64 "\n",
+			 function,
+			 value_64bit );
+		}
 		byte_stream_copy_to_uint64_big_endian(
 		 ( (fsxfs_superblock_t *) data )->realtime_bitmap_summary_inode_number,
 		 value_64bit );
-		libcnotify_printf(
-		 "%s: real-time bitmap summary inode number\t: %" PRIu64 "\n",
-		 function,
-		 value_64bit );
 
+		if( value_64bit == 0xffffffffffffffffUL )
+		{
+			libcnotify_printf(
+			 "%s: real-time bitmap summary inode number\t: %" PRIi64 " (0x%08" PRIx64 ")\n",
+			 function,
+			 (int64_t) value_64bit,
+			 value_64bit );
+		}
+		else
+		{
+			libcnotify_printf(
+			 "%s: real-time bitmap summary inode number\t: %" PRIu64 "\n",
+			 function,
+			 value_64bit );
+		}
 		byte_stream_copy_to_uint32_big_endian(
 		 ( (fsxfs_superblock_t *) data )->realtime_extents_size,
 		 value_32bit );
@@ -618,29 +650,46 @@ int libfsxfs_superblock_read_data(
 	}
 #endif /* defined( HAVE_DEBUG_OUTPUT ) */
 
-	if( ( superblock->format_version != 4 )
-	 && ( superblock->format_version != 5 ) )
+	switch( superblock->format_version )
 	{
-		libcerror_error_set(
-		 error,
-		 LIBCERROR_ERROR_DOMAIN_RUNTIME,
-		 LIBCERROR_RUNTIME_ERROR_UNSUPPORTED_VALUE,
-		 "%s: unsupported format version: %" PRIu8 ".",
-		 function,
-		 superblock->format_version );
+		case 1:
+			supported_feature_flags = 0;
+			break;
 
-		return( -1 );
+		case 2:
+			supported_feature_flags = 0x0010;
+			break;
+
+		case 3:
+			supported_feature_flags = 0x0010
+			                        | 0x0020;
+			break;
+
+		case 4:
+		case 5:
+			supported_feature_flags = 0x0010
+			                        | 0x0020
+			                        | 0x0080
+			                        | 0x0100
+			                        | 0x0400
+			                        | 0x0800
+			                        | 0x1000
+			                        | 0x2000
+			                        | 0x4000
+			                        | 0x8000;
+			break;
+
+		default:
+			libcerror_error_set(
+			 error,
+			 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+			 LIBCERROR_RUNTIME_ERROR_UNSUPPORTED_VALUE,
+			 "%s: unsupported format version: %" PRIu8 ".",
+			 function,
+			 superblock->format_version );
+
+			return( -1 );
 	}
-	supported_feature_flags = 0x0010
-	                        | 0x0020
-	                        | 0x0080
-	                        | 0x0400
-	                        | 0x0800
-	                        | 0x1000
-	                        | 0x2000
-	                        | 0x4000
-	                        | 0x8000;
-
 	if( ( (uint32_t) superblock->feature_flags & ~( supported_feature_flags ) ) != 0 )
 	{
 		libcerror_error_set(
@@ -793,8 +842,107 @@ int libfsxfs_superblock_read_data(
 
 		return( -1 );
 	}
+	if( superblock->format_version == 5 )
+	{
+		if( data_size < sizeof( fsxfs_superblock_v5_t ) )
+		{
+			libcerror_error_set(
+			 error,
+			 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+			 LIBCERROR_ARGUMENT_ERROR_VALUE_OUT_OF_BOUNDS,
+			 "%s: invalid data size value out of bounds.",
+			 function );
+
+			return( -1 );
+		}
+		byte_stream_copy_to_uint32_big_endian(
+		 ( (fsxfs_superblock_v5_t *) data )->compatible_features_flags,
+		 superblock->compatible_features_flags );
+
+		byte_stream_copy_to_uint32_big_endian(
+		 ( (fsxfs_superblock_v5_t *) data )->read_only_compatible_features_flags,
+		 superblock->read_only_compatible_features_flags );
+
+		byte_stream_copy_to_uint32_big_endian(
+		 ( (fsxfs_superblock_v5_t *) data )->incompatible_features_flags,
+		 superblock->incompatible_features_flags );
+
+		byte_stream_copy_to_uint32_big_endian(
+		 ( (fsxfs_superblock_v5_t *) data )->journal_incompatible_features_flags,
+		 superblock->journal_incompatible_features_flags );
+
 /* TODO read version 5 additional values */
 
+#if defined( HAVE_DEBUG_OUTPUT )
+		if( libcnotify_verbose != 0 )
+		{
+			libcnotify_printf(
+			 "%s: compatible features flags\t\t: 0x%08" PRIx32 "\n",
+			 function,
+			 superblock->compatible_features_flags );
+
+			libcnotify_printf(
+			 "%s: read-only compatible features flags\t: 0x%08" PRIx32 "\n",
+			 function,
+			 superblock->read_only_compatible_features_flags );
+			libfsxfs_debug_print_read_only_compatible_features_flags(
+			 superblock->read_only_compatible_features_flags );
+			libcnotify_printf(
+			 "\n" );
+
+			libcnotify_printf(
+			 "%s: incompatible features flags\t\t: 0x%08" PRIx32 "\n",
+			 function,
+			 superblock->incompatible_features_flags );
+			libfsxfs_debug_print_incompatible_features_flags(
+			 superblock->incompatible_features_flags );
+			libcnotify_printf(
+			 "\n" );
+
+			libcnotify_printf(
+			 "%s: journal incompatible features flags\t: 0x%08" PRIx32 "\n",
+			 function,
+			 superblock->journal_incompatible_features_flags );
+
+			libcnotify_printf(
+			 "\n" );
+		}
+#endif /* defined( HAVE_DEBUG_OUTPUT ) */
+
+		supported_feature_flags = 0x00000001UL
+		                        | 0x00000002UL
+		                        | 0x00000008UL
+		                        | 0x00000020UL
+		                        | 0x00000040UL
+		                        | 0x00000080UL;
+
+		if( ( superblock->incompatible_features_flags & ~( supported_feature_flags ) ) != 0 )
+		{
+			libcerror_error_set(
+			 error,
+			 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+			 LIBCERROR_RUNTIME_ERROR_UNSUPPORTED_VALUE,
+			 "%s: unsupported incompatible features flags: 0x%08" PRIx32 ".",
+			 function,
+			 superblock->incompatible_features_flags );
+
+			return( -1 );
+		}
+		supported_feature_flags = 0x00000000UL;
+
+		if( ( superblock->journal_incompatible_features_flags & ~( supported_feature_flags ) ) != 0 )
+		{
+			libcerror_error_set(
+			 error,
+			 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+			 LIBCERROR_RUNTIME_ERROR_UNSUPPORTED_VALUE,
+			 "%s: unsupported journal incompatible features flags: 0x%08" PRIx32 ".",
+			 function,
+			 superblock->journal_incompatible_features_flags );
+
+			return( -1 );
+		}
+	}
 #if defined( HAVE_DEBUG_OUTPUT )
 	if( libcnotify_verbose != 0 )
 	{
