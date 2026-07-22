@@ -104,6 +104,25 @@ static void xfs_extract_log(
 
 /* ------------------------------ Helpers ------------------------------ */
 
+static void xfs_extract_format_error_w(
+    DWORD    error_code,
+    wchar_t *buf,
+    DWORD    buf_size )
+{
+    DWORD r = FormatMessageW(
+                  FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                  NULL, error_code, 0, buf, buf_size, NULL );
+    if( r == 0 )
+    {
+        _snwprintf( buf, buf_size, L"error code %u", error_code );
+        return;
+    }
+    while( r > 0 && ( buf[ r - 1 ] == L'\r' || buf[ r - 1 ] == L'\n' ) )
+    {
+        buf[ --r ] = L'\0';
+    }
+}
+
 static int xfs_extract_ensure_directory(
     const wchar_t *path )
 {
@@ -322,10 +341,10 @@ int wmain(
     const wchar_t      *explicit_mount = NULL;
     const wchar_t      *log_file_path  = NULL;
     const wchar_t      *temp_base      = NULL;
-    int                 mount_wait     = XFS_EXTRACT_WAIT_FOR_MOUNT_ERROR;
-    DWORD               exit_code      = 0;
-    int                 result         = 0;
-    int                 verbose        = 0;
+    int                 mount_wait        = XFS_EXTRACT_WAIT_FOR_MOUNT_ERROR;
+    DWORD               exit_code         = 0;
+    int                 result            = 0;
+    int                 verbose           = 0;
 
     if( argc == 2
      && ( wcscmp( argv[ 1 ], L"-h" ) == 0
@@ -371,7 +390,8 @@ int wmain(
             verbose = 1;
         }
         else if( wcscmp( argv[ argument_index ], L"-t" ) == 0
-              || wcscmp( argv[ argument_index ], L"--temp-folder" ) == 0 )
+              || wcscmp( argv[ argument_index ], L"--temp-folder" ) == 0
+              || wcscmp( argv[ argument_index ], L"--temp-path" ) == 0 )
         {
             const wchar_t *option_name = argv[ argument_index ];
             argument_index++;
@@ -492,14 +512,37 @@ int wmain(
         tmp_clean[ --tmp_len ] = L'\0';
     }
 
+    if( temp_base != NULL && temp_base[ 0 ] != L'\0' )
+    {
+        /* Temp base must be created by the user beforehand; do not create it. */
+        DWORD attrs = GetFileAttributesW( tmp_clean );
+        if( attrs == INVALID_FILE_ATTRIBUTES
+         || !( attrs & FILE_ATTRIBUTE_DIRECTORY ) )
+        {
+            fwprintf( stderr,
+                      L"Error: temp directory '%s' does not exist; create it beforehand.\n",
+                      tmp_clean );
+            xfs_extract_log( L"Error: temp directory '%s' does not exist", tmp_clean );
+            xfs_extract_log_close();
+            return( 1 );
+        }
+        xfs_extract_log( L"Temp base verified: %s", tmp_clean );
+    }
+
     /* Create a unique temporary mount point. */
     _snwprintf( mount_point, MAX_PATH, L"%s\\fsxfs_mount_%u_%u",
                 tmp_clean, GetCurrentProcessId(), GetTickCount() );
 
     if( !CreateDirectoryW( mount_point, NULL ) )
     {
-        xfs_extract_log( L"Error: cannot create mount point: %s (%u)",
-                         mount_point, GetLastError() );
+        DWORD   err = GetLastError();
+        wchar_t err_msg[ 512 ];
+        xfs_extract_format_error_w( err, err_msg, 512 );
+        fwprintf( stderr,
+                  L"Error: cannot create mount point '%s': %s (code %u)\n",
+                  mount_point, err_msg, err );
+        xfs_extract_log( L"Error: cannot create mount point '%s': %s (code %u)",
+                         mount_point, err_msg, err );
         xfs_extract_log_close();
         return( 1 );
     }
@@ -574,10 +617,14 @@ int wmain(
         return( 1 );
     }
 
+    Sleep( 5000 ); /* Give the mount a moment to settle before copying. */
+
     /* Copy. */
     xfs_extract_log( L"Copying files..." );
     result = xfs_extract_copy_directory( mount_point, output_dir );
     xfs_extract_log( L"Copy %s", result == 0 ? L"complete" : L"completed with warnings" );
+
+    Sleep( 2000 ); /* Give the copy a moment to settle before unmounting. */
 
     /* Unmount. */
     xfs_extract_log( L"Unmounting (PID %u)...", pi.dwProcessId );
@@ -589,6 +636,10 @@ int wmain(
     xfs_extract_remove_directory( mount_point );
     xfs_extract_log( L"Done (exit code 0)" );
     xfs_extract_log_close();
+
+#ifdef _DEBUG
+    fwprintf( stdout, L"Extraction complete. Files copied to: %s\n", output_dir );
+#endif
 
     return( 0 );
 }
@@ -701,6 +752,21 @@ static void xfs_extract_log(
 }
 
 /* ------------------------------ Helpers ------------------------------ */
+
+static const char *xfs_extract_errno_hint(
+    int err )
+{
+    switch( err )
+    {
+        case ENOENT:  return "parent directory does not exist";
+        case EACCES:  return "permission denied — check write permissions on parent directory";
+        case EPERM:   return "operation not permitted";
+        case ENOSPC:  return "no space left on device";
+        case EROFS:   return "filesystem is read-only";
+        case ENAMETOOLONG: return "path is too long";
+        default:      return NULL;
+    }
+}
 
 static int xfs_extract_ensure_directory(
     const char *path )
@@ -1116,12 +1182,12 @@ int main(
     const char *explicit_mount = NULL;
     const char *log_file_path  = NULL;
     const char *temp_base      = NULL;
-    int        mount_status    = 0;
-    int        mount_wait      = XFS_EXTRACT_WAIT_FOR_MOUNT_ERROR;
-    int        mounted         = 0;
-    int        result          = 0;
-    int        verbose         = 0;
-    pid_t      mount_pid       = -1;
+    int        mount_status      = 0;
+    int        mount_wait        = XFS_EXTRACT_WAIT_FOR_MOUNT_ERROR;
+    int        mounted           = 0;
+    int        result            = 0;
+    int        verbose           = 0;
+    pid_t      mount_pid         = -1;
 
     if( argc == 2
      && ( strcmp( argv[ 1 ], "-h" ) == 0
@@ -1246,12 +1312,33 @@ int main(
         }
     }
     xfs_extract_log( "Temp base: %s", tmp );
+    if( temp_base != NULL && temp_base[ 0 ] != '\0' )
+    {
+        /* Temp base must be created by the user beforehand; do not create it. */
+        struct stat tb_st;
+        if( stat( tmp, &tb_st ) != 0 || !S_ISDIR( tb_st.st_mode ) )
+        {
+            fprintf( stderr,
+                     "Error: temp directory '%s' does not exist; create it beforehand.\n",
+                     tmp );
+            xfs_extract_log( "Error: temp directory '%s' does not exist", tmp );
+            xfs_extract_log_close();
+            return( 1 );
+        }
+        xfs_extract_log( "Temp base verified: %s", tmp );
+    }
     if( xfs_extract_create_mount_point( tmp, mount_point, sizeof( mount_point ) ) != 0 )
     {
-        fprintf( stderr, "Error: cannot create mount point %s: %s\n",
-                 tmp, strerror( errno ) );
-        xfs_extract_log( "Error: create mount point failed in %s: %s",
-                         tmp, strerror( errno ) );
+        int         saved_errno = errno;
+        const char *hint        = xfs_extract_errno_hint( saved_errno );
+        fprintf( stderr, "Error: cannot create mount point in '%s': %s\n",
+                 tmp, strerror( saved_errno ) );
+        if( hint != NULL )
+        {
+            fprintf( stderr, "  Note: %s\n", hint );
+        }
+        xfs_extract_log( "Error: create mount point failed in '%s': %s",
+                         tmp, strerror( saved_errno ) );
         xfs_extract_log_close();
         return( 1 );
     }
