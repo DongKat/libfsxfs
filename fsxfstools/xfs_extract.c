@@ -139,7 +139,8 @@ static int xfs_extract_ensure_directory(
 
 static int xfs_extract_copy_directory(
     const wchar_t *src_dir,
-    const wchar_t *dst_dir )
+    const wchar_t *dst_dir,
+    int           *file_count )
 {
     wchar_t          search_path[ MAX_PATH ];
     wchar_t          src_path[ MAX_PATH ];
@@ -172,10 +173,16 @@ static int xfs_extract_copy_directory(
 
         if( fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY )
         {
-            if( xfs_extract_copy_directory( src_path, dst_path ) != 0 )
+            if( xfs_extract_copy_directory( src_path, dst_path, file_count ) != 0 )
             {
                 result = -1;
             }
+        }
+        else if( fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT )
+        {
+            xfs_extract_log( L"Error: %s is a symlink, refusing to copy",
+                             src_path );
+            result = -1;
         }
         else
         {
@@ -184,6 +191,10 @@ static int xfs_extract_copy_directory(
                 xfs_extract_log( L"Error: CopyFile failed %s -> %s (%u)",
                                  src_path, dst_path, GetLastError() );
                 result = -1;
+            }
+            else if( file_count != NULL )
+            {
+                ( *file_count )++;
             }
         }
     }
@@ -620,9 +631,12 @@ int wmain(
     Sleep( 5000 ); /* Give the mount a moment to settle before copying. */
 
     /* Copy. */
+    int file_count = 0;
     xfs_extract_log( L"Copying files..." );
-    result = xfs_extract_copy_directory( mount_point, output_dir );
-    xfs_extract_log( L"Copy %s", result == 0 ? L"complete" : L"completed with warnings" );
+    result = xfs_extract_copy_directory( mount_point, output_dir, &file_count );
+    xfs_extract_log( L"Copy %s (%d files copied)",
+                     result == 0 ? L"complete" : L"completed with warnings",
+                     file_count );
 
     Sleep( 2000 ); /* Give the copy a moment to settle before unmounting. */
 
@@ -868,7 +882,8 @@ done:
 
 static int xfs_extract_copy_directory(
     const char *src_dir,
-    const char *dst_dir )
+    const char *dst_dir,
+    int        *file_count )
 {
     DIR           *dir;
     struct dirent *entry;
@@ -918,7 +933,7 @@ static int xfs_extract_copy_directory(
         }
         if( S_ISDIR( st.st_mode ) )
         {
-            if( xfs_extract_copy_directory( src_path, dst_path ) != 0 )
+            if( xfs_extract_copy_directory( src_path, dst_path, file_count ) != 0 )
             {
                 result = -1;
             }
@@ -941,12 +956,20 @@ static int xfs_extract_copy_directory(
                                  dst_path, strerror( errno ) );
                 result = -1;
             }
+            else if( file_count != NULL )
+            {
+                ( *file_count )++;
+            }
         }
         else if( S_ISREG( st.st_mode ) )
         {
             if( xfs_extract_copy_file( src_path, dst_path ) != 0 )
             {
                 result = -1;
+            }
+            else if( file_count != NULL )
+            {
+                ( *file_count )++;
             }
         }
     }
@@ -1414,9 +1437,12 @@ int main(
     }
     mounted = 1;
 
+    int file_count = 0;
     xfs_extract_log( "Copying files..." );
-    result = xfs_extract_copy_directory( mount_point, output_dir );
-    xfs_extract_log( "Copy %s", result == 0 ? "complete" : "completed with warnings" );
+    result = xfs_extract_copy_directory( mount_point, output_dir, &file_count );
+    xfs_extract_log( "Copy %s (%d files copied)",
+                     result == 0 ? "complete" : "completed with warnings",
+                     file_count );
 
     if( mounted != 0 )
     {
