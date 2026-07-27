@@ -42,6 +42,41 @@
 #include <string.h>
 #include <tchar.h>
 
+#define XFS_EXTRACT_PATH_MAX 4096
+
+/* Per-directory NTFS case sensitivity (Win10 1803+). The Win32 API exposes no
+ * wrapper for it; fsutil sets it via NtSetInformationFile with the kernel-only
+ * FileCaseSensitiveInformation class, so the pieces are declared here and the
+ * function is resolved from ntdll.dll at runtime.
+ */
+#ifndef FILE_CS_FLAG_CASE_SENSITIVE_DIR
+#define FILE_CS_FLAG_CASE_SENSITIVE_DIR 0x00000001
+#endif
+
+#define XFS_FILE_CASE_SENSITIVE_INFORMATION_CLASS 71
+
+typedef struct _XFS_IO_STATUS_BLOCK
+{
+    union
+    {
+        LONG  Status;
+        PVOID Pointer;
+    } u;
+    ULONG_PTR Information;
+} XFS_IO_STATUS_BLOCK;
+
+typedef struct _XFS_FILE_CASE_SENSITIVE_INFORMATION
+{
+    ULONG Flags;
+} XFS_FILE_CASE_SENSITIVE_INFORMATION;
+
+typedef LONG( NTAPI *xfs_NtSetInformationFile_t )(
+    HANDLE               FileHandle,
+    XFS_IO_STATUS_BLOCK *IoStatusBlock,
+    PVOID                FileInformation,
+    ULONG                Length,
+    int                  FileInformationClass );
+
 /* ------------------------------ Logging ------------------------------ */
 
 static FILE *g_log = NULL;
@@ -123,6 +158,30 @@ static void xfs_extract_format_error_w(
     }
 }
 
+static void xfs_extract_to_extended_path(
+    wchar_t       *out,
+    size_t         out_count,
+    const wchar_t *path )
+{
+    wchar_t full[ XFS_EXTRACT_PATH_MAX ];
+    DWORD   len;
+
+    if( wcsncmp( path, L"\\\\?\\", 4 ) == 0 )
+    {
+        _snwprintf( out, out_count, L"%s", path );
+        return;
+    }
+    len = GetFullPathNameW( path, XFS_EXTRACT_PATH_MAX, full, NULL );
+    if( len > 0 && len < XFS_EXTRACT_PATH_MAX )
+    {
+        _snwprintf( out, out_count, L"\\\\?\\%s", full );
+    }
+    else
+    {
+        _snwprintf( out, out_count, L"\\\\?\\%s", path );
+    }
+}
+
 static int xfs_extract_ensure_directory(
     const wchar_t *path )
 {
@@ -137,16 +196,109 @@ static int xfs_extract_ensure_directory(
     return( -1 );
 }
 
-static int xfs_extract_copy_directory(
-    const wchar_t *src_dir,
-    const wchar_t *dst_dir )
+/* Enables per-directory case sensitivity on an NTFS directory so that names
+ * differing only by case (E vs e) can coexist, matching the case-sensitive XFS
+ * source. Must be called before the directory is populated.
+ * Returns 0 on success or -1 on failure (feature unavailable, disabled by policy,
+ * insufficient privilege, or non-NTFS destination).
+ */
+static int xfs_extract_enable_case_sensitive(
+    const wchar_t *path )
 {
-    wchar_t          search_path[ MAX_PATH ];
-    wchar_t          src_path[ MAX_PATH ];
-    wchar_t          dst_path[ MAX_PATH ];
+    static xfs_NtSetInformationFile_t NtSetInformationFile = NULL;
+    static int                        resolved             = 0;
+
+    XFS_FILE_CASE_SENSITIVE_INFORMATION info;
+    XFS_IO_STATUS_BLOCK                 iosb;
+    HANDLE                              h;
+    LONG                                status;
+
+    if( resolved == 0 )
+    {
+        HMODULE ntdll = GetModuleHandleW( L"ntdll.dll" );
+        if( ntdll != NULL )
+        {
+            NtSetInformationFile = (xfs_NtSetInformationFile_t) GetProcAddress(
+                                       ntdll, "NtSetInformationFile" );
+        }
+        resolved = 1;
+    }
+    if( NtSetInformationFile == NULL )
+    {
+        return( -1 );
+    }
+    h = CreateFileW( path,
+                     FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES,
+                     FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                     NULL, OPEN_EXISTING,
+                     FILE_FLAG_BACKUP_SEMANTICS, NULL );
+    if( h == INVALID_HANDLE_VALUE )
+    {
+        return( -1 );
+    }
+    info.Flags = FILE_CS_FLAG_CASE_SENSITIVE_DIR;
+    ZeroMemory( &iosb, sizeof( iosb ) );
+
+    status = NtSetInformationFile( h, &iosb, &info, sizeof( info ),
+                                   XFS_FILE_CASE_SENSITIVE_INFORMATION_CLASS );
+    CloseHandle( h );
+
+    /* NT_SUCCESS: status >= 0 */
+    return( status >= 0 ? 0 : -1 );
+}
+
+/* Determines whether a name only differs by case from a sibling in src_dir,
+ * and is the lowercase variant of the pair.
+ * XFS/Linux is case-sensitive so E/ and e/ are distinct, but the NTFS
+ * destination is case-insensitive and would merge them. The lowercase variant
+ * (ASCII 'a' > 'A', so the case-sensitively greater name) is suffixed with "__"
+ * to keep both on the destination.
+ * Returns 1 if the name should be suffixed or 0 if not.
+ * ponytail: O(n) per entry -> O(n^2) per directory; fine for real trees, not tuned for huge dirs.
+ */
+static int xfs_extract_name_is_lower_collision(
+    const wchar_t *src_dir,
+    const wchar_t *name )
+{
+    wchar_t          search_path[ XFS_EXTRACT_PATH_MAX ];
     WIN32_FIND_DATAW fd;
     HANDLE           hFind;
-    int              result = 0;
+    int              needs_suffix = 0;
+
+    _snwprintf( search_path, XFS_EXTRACT_PATH_MAX, L"%s\\*", src_dir );
+    hFind = FindFirstFileW( search_path, &fd );
+    if( hFind == INVALID_HANDLE_VALUE )
+    {
+        return( 0 );
+    }
+    do
+    {
+        if( _wcsicmp( fd.cFileName, name ) == 0
+         && wcscmp( fd.cFileName, name ) != 0
+         && wcscmp( name, fd.cFileName ) > 0 )
+        {
+            needs_suffix = 1;
+            break;
+        }
+    }
+    while( FindNextFileW( hFind, &fd ) );
+
+    FindClose( hFind );
+    return( needs_suffix );
+}
+
+static int xfs_extract_copy_directory(
+    const wchar_t *src_dir,
+    const wchar_t *dst_dir,
+    int           *file_count )
+{
+    wchar_t          search_path[ XFS_EXTRACT_PATH_MAX ];
+    wchar_t          src_path[ XFS_EXTRACT_PATH_MAX ];
+    wchar_t          dst_path[ XFS_EXTRACT_PATH_MAX ];
+    WIN32_FIND_DATAW fd;
+    HANDLE           hFind;
+    int              result         = 0;
+    int              case_sensitive = 0;
 
     if( xfs_extract_ensure_directory( dst_dir ) != 0 )
     {
@@ -154,7 +306,12 @@ static int xfs_extract_copy_directory(
                          dst_dir, GetLastError() );
         return( -1 );
     }
-    _snwprintf( search_path, MAX_PATH, L"%s\\*", src_dir );
+    /* Prefer native case sensitivity so real names are preserved; the "__"
+     * suffix is only used where this could not be enabled.
+     */
+    case_sensitive = ( xfs_extract_enable_case_sensitive( dst_dir ) == 0 );
+
+    _snwprintf( search_path, XFS_EXTRACT_PATH_MAX, L"%s\\*", src_dir );
     hFind = FindFirstFileW( search_path, &fd );
     if( hFind == INVALID_HANDLE_VALUE )
     {
@@ -167,15 +324,32 @@ static int xfs_extract_copy_directory(
         {
             continue;
         }
-        _snwprintf( src_path, MAX_PATH, L"%s\\%s", src_dir, fd.cFileName );
-        _snwprintf( dst_path, MAX_PATH, L"%s\\%s", dst_dir, fd.cFileName );
+        _snwprintf( src_path, XFS_EXTRACT_PATH_MAX, L"%s\\%s", src_dir, fd.cFileName );
+
+        if( case_sensitive == 0
+         && xfs_extract_name_is_lower_collision( src_dir, fd.cFileName ) )
+        {
+            _snwprintf( dst_path, XFS_EXTRACT_PATH_MAX, L"%s\\%s__", dst_dir, fd.cFileName );
+            xfs_extract_log( L"Case collision: %s renamed to %s__ on destination",
+                             fd.cFileName, fd.cFileName );
+        }
+        else
+        {
+            _snwprintf( dst_path, XFS_EXTRACT_PATH_MAX, L"%s\\%s", dst_dir, fd.cFileName );
+        }
 
         if( fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY )
         {
-            if( xfs_extract_copy_directory( src_path, dst_path ) != 0 )
+            if( xfs_extract_copy_directory( src_path, dst_path, file_count ) != 0 )
             {
                 result = -1;
             }
+        }
+        else if( fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT )
+        {
+            xfs_extract_log( L"Error: %s is a symlink, refusing to copy",
+                             src_path );
+            result = -1;
         }
         else
         {
@@ -184,6 +358,10 @@ static int xfs_extract_copy_directory(
                 xfs_extract_log( L"Error: CopyFile failed %s -> %s (%u)",
                                  src_path, dst_path, GetLastError() );
                 result = -1;
+            }
+            else if( file_count != NULL )
+            {
+                ( *file_count )++;
             }
         }
     }
@@ -196,12 +374,12 @@ static int xfs_extract_copy_directory(
 static void xfs_extract_remove_directory(
     const wchar_t *path )
 {
-    wchar_t          search_path[ MAX_PATH ];
-    wchar_t          child_path[ MAX_PATH ];
+    wchar_t          search_path[ XFS_EXTRACT_PATH_MAX ];
+    wchar_t          child_path[ XFS_EXTRACT_PATH_MAX ];
     WIN32_FIND_DATAW fd;
     HANDLE           hFind;
 
-    _snwprintf( search_path, MAX_PATH, L"%s\\*", path );
+    _snwprintf( search_path, XFS_EXTRACT_PATH_MAX, L"%s\\*", path );
     hFind = FindFirstFileW( search_path, &fd );
     if( hFind != INVALID_HANDLE_VALUE )
     {
@@ -212,7 +390,7 @@ static void xfs_extract_remove_directory(
             {
                 continue;
             }
-            _snwprintf( child_path, MAX_PATH, L"%s\\%s", path, fd.cFileName );
+            _snwprintf( child_path, XFS_EXTRACT_PATH_MAX, L"%s\\%s", path, fd.cFileName );
             if( fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY )
             {
                 xfs_extract_remove_directory( child_path );
@@ -619,12 +797,20 @@ int wmain(
 
     Sleep( 5000 ); /* Give the mount a moment to settle before copying. */
 
-    /* Copy. */
-    xfs_extract_log( L"Copying files..." );
-    result = xfs_extract_copy_directory( mount_point, output_dir );
-    xfs_extract_log( L"Copy %s", result == 0 ? L"complete" : L"completed with warnings" );
+    /* Copy — use \\?\ extended-length paths to handle paths > MAX_PATH. */
+    int     file_count = 0;
+    wchar_t mount_point_ext[ XFS_EXTRACT_PATH_MAX ];
+    wchar_t output_dir_ext[ XFS_EXTRACT_PATH_MAX ];
+    xfs_extract_to_extended_path( mount_point_ext, XFS_EXTRACT_PATH_MAX, mount_point );
+    xfs_extract_to_extended_path( output_dir_ext, XFS_EXTRACT_PATH_MAX, output_dir );
 
-    Sleep( 2000 ); /* Give the copy a moment to settle before unmounting. */
+    xfs_extract_log( L"Copying files..." );
+    result = xfs_extract_copy_directory( mount_point_ext, output_dir_ext, &file_count );
+    xfs_extract_log( L"Copy %s (%d files copied)",
+                     result == 0 ? L"complete" : L"completed with warnings",
+                     file_count );
+
+    Sleep( 5000 ); /* Give the copy a moment to settle before unmounting. */
 
     /* Unmount. */
     xfs_extract_log( L"Unmounting (PID %u)...", pi.dwProcessId );
@@ -633,7 +819,7 @@ int wmain(
     CloseHandle( pi.hProcess );
     Sleep( 2000 );
 
-    xfs_extract_remove_directory( mount_point );
+    xfs_extract_remove_directory( mount_point_ext );
     xfs_extract_log( L"Done (exit code 0)" );
     xfs_extract_log_close();
 
@@ -868,7 +1054,8 @@ done:
 
 static int xfs_extract_copy_directory(
     const char *src_dir,
-    const char *dst_dir )
+    const char *dst_dir,
+    int        *file_count )
 {
     DIR           *dir;
     struct dirent *entry;
@@ -918,7 +1105,7 @@ static int xfs_extract_copy_directory(
         }
         if( S_ISDIR( st.st_mode ) )
         {
-            if( xfs_extract_copy_directory( src_path, dst_path ) != 0 )
+            if( xfs_extract_copy_directory( src_path, dst_path, file_count ) != 0 )
             {
                 result = -1;
             }
@@ -941,6 +1128,10 @@ static int xfs_extract_copy_directory(
                                  dst_path, strerror( errno ) );
                 result = -1;
             }
+            else if( file_count != NULL )
+            {
+                ( *file_count )++;
+            }
         }
         else if( S_ISREG( st.st_mode ) )
         {
@@ -948,6 +1139,14 @@ static int xfs_extract_copy_directory(
             {
                 result = -1;
             }
+            else if( file_count != NULL )
+            {
+                ( *file_count )++;
+            }
+        }
+        else
+        {
+            xfs_extract_log( "Warning: skipping unsupported file type %s", src_path );
         }
     }
     if( errno != 0 )
@@ -1414,9 +1613,12 @@ int main(
     }
     mounted = 1;
 
+    int file_count = 0;
     xfs_extract_log( "Copying files..." );
-    result = xfs_extract_copy_directory( mount_point, output_dir );
-    xfs_extract_log( "Copy %s", result == 0 ? "complete" : "completed with warnings" );
+    result = xfs_extract_copy_directory( mount_point, output_dir, &file_count );
+    xfs_extract_log( "Copy %s (%d files copied)",
+                     result == 0 ? "complete" : "completed with warnings",
+                     file_count );
 
     if( mounted != 0 )
     {

@@ -158,6 +158,203 @@ int mount_dokan_set_find_data(
 	return( 1 );
 }
 
+/* Retrieves the size to report to Windows for a file entry
+ * A symbolic link is presented as a text file containing its target path,
+ * so its reported size is the UTF-8 target length (excluding the end of string character)
+ * Returns 1 if successful or -1 on error
+ */
+int mount_dokan_get_reported_size(
+     mount_file_entry_t *file_entry,
+     size64_t *size,
+     libcerror_error_t **error )
+{
+	static char *function = "mount_dokan_get_reported_size";
+	size_t utf8_size      = 0;
+	int result            = 0;
+
+	result = mount_file_entry_is_symbolic_link(
+	          file_entry,
+	          error );
+
+	if( result == -1 )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+		 LIBCERROR_RUNTIME_ERROR_GET_FAILED,
+		 "%s: unable to determine if file entry is a symbolic link.",
+		 function );
+
+		return( -1 );
+	}
+	if( result != 0 )
+	{
+		result = mount_file_entry_get_symbolic_link_target_utf8_size(
+		          file_entry,
+		          &utf8_size,
+		          error );
+
+		if( result == -1 )
+		{
+			libcerror_error_set(
+			 error,
+			 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+			 LIBCERROR_RUNTIME_ERROR_GET_FAILED,
+			 "%s: unable to retrieve symbolic link target size.",
+			 function );
+
+			return( -1 );
+		}
+		if( ( result != 0 )
+		 && ( utf8_size > 0 ) )
+		{
+			*size = (size64_t) ( utf8_size - 1 );
+
+			return( 1 );
+		}
+	}
+	if( mount_file_entry_get_size(
+	     file_entry,
+	     size,
+	     error ) != 1 )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+		 LIBCERROR_RUNTIME_ERROR_GET_FAILED,
+		 "%s: unable to retrieve file entry size.",
+		 function );
+
+		return( -1 );
+	}
+	return( 1 );
+}
+
+/* Reads the symbolic link target text into the buffer at the specified offset
+ * The symbolic link is presented as a text file containing its UTF-8 target path
+ * Returns the number of bytes read or -1 on error
+ */
+ssize_t mount_dokan_read_symbolic_link(
+         mount_file_entry_t *file_entry,
+         void *buffer,
+         size_t buffer_size,
+         off64_t offset,
+         libcerror_error_t **error )
+{
+	uint8_t *target       = NULL;
+	static char *function = "mount_dokan_read_symbolic_link";
+	size_t content_size   = 0;
+	size_t read_size      = 0;
+	size_t utf8_size      = 0;
+
+	if( buffer == NULL )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+		 LIBCERROR_ARGUMENT_ERROR_INVALID_VALUE,
+		 "%s: invalid buffer.",
+		 function );
+
+		return( -1 );
+	}
+	if( offset < 0 )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+		 LIBCERROR_ARGUMENT_ERROR_VALUE_OUT_OF_BOUNDS,
+		 "%s: invalid offset value out of bounds.",
+		 function );
+
+		return( -1 );
+	}
+	if( mount_file_entry_get_symbolic_link_target_utf8_size(
+	     file_entry,
+	     &utf8_size,
+	     error ) != 1 )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+		 LIBCERROR_RUNTIME_ERROR_GET_FAILED,
+		 "%s: unable to retrieve symbolic link target size.",
+		 function );
+
+		return( -1 );
+	}
+	if( utf8_size == 0 )
+	{
+		return( 0 );
+	}
+	target = (uint8_t *) memory_allocate(
+	                      sizeof( uint8_t ) * utf8_size );
+
+	if( target == NULL )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_MEMORY,
+		 LIBCERROR_MEMORY_ERROR_INSUFFICIENT,
+		 "%s: unable to create symbolic link target.",
+		 function );
+
+		return( -1 );
+	}
+	if( mount_file_entry_get_symbolic_link_target_utf8(
+	     file_entry,
+	     target,
+	     utf8_size,
+	     error ) != 1 )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+		 LIBCERROR_RUNTIME_ERROR_GET_FAILED,
+		 "%s: unable to retrieve symbolic link target.",
+		 function );
+
+		memory_free(
+		 target );
+
+		return( -1 );
+	}
+	/* Do not include the end of string character in the file content
+	 */
+	content_size = utf8_size - 1;
+
+	if( (size_t) offset < content_size )
+	{
+		read_size = content_size - (size_t) offset;
+
+		if( read_size > buffer_size )
+		{
+			read_size = buffer_size;
+		}
+		if( memory_copy(
+		     buffer,
+		     &( target[ offset ] ),
+		     read_size ) == NULL )
+		{
+			libcerror_error_set(
+			 error,
+			 LIBCERROR_ERROR_DOMAIN_MEMORY,
+			 LIBCERROR_MEMORY_ERROR_COPY_FAILED,
+			 "%s: unable to copy symbolic link target to buffer.",
+			 function );
+
+			memory_free(
+			 target );
+
+			return( -1 );
+		}
+	}
+	memory_free(
+	 target );
+
+	return( (ssize_t) read_size );
+}
+
 /* Fills a directory entry
  * Returns 1 if successful or -1 on error
  */
@@ -212,7 +409,7 @@ int mount_dokan_filldir(
 	}
 	if( file_entry != NULL )
 	{
-		if( mount_file_entry_get_size(
+		if( mount_dokan_get_reported_size(
 		     file_entry,
 		     &file_size,
 		     error ) != 1 )
@@ -884,12 +1081,42 @@ NTSTATUS __stdcall mount_dokan_ReadFile(
 
 		goto on_error;
 	}
-	read_count = mount_file_entry_read_buffer_at_offset(
-	              (mount_file_entry_t *) file_info->Context,
-	              buffer,
-	              (size_t) number_of_bytes_to_read,
-	              (off64_t) offset,
-	              &error );
+	result = mount_file_entry_is_symbolic_link(
+	          (mount_file_entry_t *) file_info->Context,
+	          &error );
+
+	if( result == -1 )
+	{
+		libcerror_error_set(
+		 &error,
+		 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+		 LIBCERROR_RUNTIME_ERROR_GET_FAILED,
+		 "%s: unable to determine if file entry is a symbolic link.",
+		 function );
+
+		result = MOUNT_DOKAN_ERROR_READ_FAULT;
+
+		goto on_error;
+	}
+	if( result != 0 )
+	{
+		read_count = mount_dokan_read_symbolic_link(
+		              (mount_file_entry_t *) file_info->Context,
+		              buffer,
+		              (size_t) number_of_bytes_to_read,
+		              (off64_t) offset,
+		              &error );
+	}
+	else
+	{
+		read_count = mount_file_entry_read_buffer_at_offset(
+		              (mount_file_entry_t *) file_info->Context,
+		              buffer,
+		              (size_t) number_of_bytes_to_read,
+		              (off64_t) offset,
+		              &error );
+	}
+	result = 0;
 
 	if( read_count < 0 )
 	{
@@ -1287,7 +1514,7 @@ NTSTATUS __stdcall mount_dokan_GetFileInformation(
 	}
 	if( file_entry != NULL )
 	{
-		if( mount_file_entry_get_size(
+		if( mount_dokan_get_reported_size(
 		     file_entry,
 		     &file_size,
 		     &error ) != 1 )

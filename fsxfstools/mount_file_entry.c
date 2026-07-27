@@ -740,6 +740,136 @@ int mount_file_entry_get_symbolic_link_target(
 	return( 1 );
 }
 
+/* Determines if the file entry is a symbolic link
+ * Returns 1 if a symbolic link, 0 if not or -1 on error
+ */
+int mount_file_entry_is_symbolic_link(
+     mount_file_entry_t *file_entry,
+     libcerror_error_t **error )
+{
+	static char *function = "mount_file_entry_is_symbolic_link";
+	uint16_t file_mode    = 0;
+
+	if( file_entry == NULL )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+		 LIBCERROR_ARGUMENT_ERROR_INVALID_VALUE,
+		 "%s: invalid file entry.",
+		 function );
+
+		return( -1 );
+	}
+	if( libfsxfs_file_entry_get_file_mode(
+	     file_entry->fsxfs_file_entry,
+	     &file_mode,
+	     error ) != 1 )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+		 LIBCERROR_RUNTIME_ERROR_GET_FAILED,
+		 "%s: unable to retrieve file mode.",
+		 function );
+
+		return( -1 );
+	}
+	/* The XFS file mode matches that of POSIX, S_IFLNK is 0xa000
+	 */
+	if( ( file_mode & 0xf000 ) == 0xa000 )
+	{
+		return( 1 );
+	}
+	return( 0 );
+}
+
+/* Retrieves the size of the UTF-8 encoded symbolic link target
+ * The returned size includes the end of string character
+ * Returns 1 if successful, 0 if not available or -1 on error
+ */
+int mount_file_entry_get_symbolic_link_target_utf8_size(
+     mount_file_entry_t *file_entry,
+     size_t *utf8_string_size,
+     libcerror_error_t **error )
+{
+	static char *function = "mount_file_entry_get_symbolic_link_target_utf8_size";
+	int result            = 0;
+
+	if( file_entry == NULL )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+		 LIBCERROR_ARGUMENT_ERROR_INVALID_VALUE,
+		 "%s: invalid file entry.",
+		 function );
+
+		return( -1 );
+	}
+	result = libfsxfs_file_entry_get_utf8_symbolic_link_target_size(
+	          file_entry->fsxfs_file_entry,
+	          utf8_string_size,
+	          error );
+
+	if( result == -1 )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+		 LIBCERROR_RUNTIME_ERROR_GET_FAILED,
+		 "%s: unable to retrieve UTF-8 symbolic link target size.",
+		 function );
+
+		return( -1 );
+	}
+	return( result );
+}
+
+/* Retrieves the UTF-8 encoded symbolic link target
+ * The size should include the end of string character
+ * Returns 1 if successful, 0 if not available or -1 on error
+ */
+int mount_file_entry_get_symbolic_link_target_utf8(
+     mount_file_entry_t *file_entry,
+     uint8_t *utf8_string,
+     size_t utf8_string_size,
+     libcerror_error_t **error )
+{
+	static char *function = "mount_file_entry_get_symbolic_link_target_utf8";
+	int result            = 0;
+
+	if( file_entry == NULL )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+		 LIBCERROR_ARGUMENT_ERROR_INVALID_VALUE,
+		 "%s: invalid file entry.",
+		 function );
+
+		return( -1 );
+	}
+	result = libfsxfs_file_entry_get_utf8_symbolic_link_target(
+	          file_entry->fsxfs_file_entry,
+	          utf8_string,
+	          utf8_string_size,
+	          error );
+
+	if( result == -1 )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+		 LIBCERROR_RUNTIME_ERROR_GET_FAILED,
+		 "%s: unable to retrieve UTF-8 symbolic link target.",
+		 function );
+
+		return( -1 );
+	}
+	return( result );
+}
+
 /* Retrieves the number of sub file entries
  * Returns 1 if successful or -1 on error
  */

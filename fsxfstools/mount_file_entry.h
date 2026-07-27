@@ -108,6 +108,21 @@ int mount_file_entry_get_symbolic_link_target(
      size_t string_size,
      libcerror_error_t **error );
 
+int mount_file_entry_is_symbolic_link(
+     mount_file_entry_t *file_entry,
+     libcerror_error_t **error );
+
+int mount_file_entry_get_symbolic_link_target_utf8_size(
+     mount_file_entry_t *file_entry,
+     size_t *utf8_string_size,
+     libcerror_error_t **error );
+
+int mount_file_entry_get_symbolic_link_target_utf8(
+     mount_file_entry_t *file_entry,
+     uint8_t *utf8_string,
+     size_t utf8_string_size,
+     libcerror_error_t **error );
+
 int mount_file_entry_get_number_of_sub_file_entries(
      mount_file_entry_t *file_entry,
      int *number_of_sub_entries,

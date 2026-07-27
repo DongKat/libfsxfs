@@ -57,6 +57,18 @@ int mount_dokan_set_find_data(
      uint64_t modification_time,
      libcerror_error_t **error );
 
+int mount_dokan_get_reported_size(
+     mount_file_entry_t *file_entry,
+     size64_t *size,
+     libcerror_error_t **error );
+
+ssize_t mount_dokan_read_symbolic_link(
+         mount_file_entry_t *file_entry,
+         void *buffer,
+         size_t buffer_size,
+         off64_t offset,
+         libcerror_error_t **error );
+
 int mount_dokan_filldir(
      PFillFindData fill_find_data,
      DOKAN_FILE_INFO *file_info,
