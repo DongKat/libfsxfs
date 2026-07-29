@@ -41,6 +41,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <tchar.h>
+#include <share.h>
 
 #define XFS_EXTRACT_PATH_MAX 4096
 
@@ -247,46 +248,6 @@ static int xfs_extract_enable_case_sensitive(
     return( status >= 0 ? 0 : -1 );
 }
 
-/* Determines whether a name only differs by case from a sibling in src_dir,
- * and is the lowercase variant of the pair.
- * XFS/Linux is case-sensitive so E/ and e/ are distinct, but the NTFS
- * destination is case-insensitive and would merge them. The lowercase variant
- * (ASCII 'a' > 'A', so the case-sensitively greater name) is suffixed with "__"
- * to keep both on the destination.
- * Returns 1 if the name should be suffixed or 0 if not.
- * ponytail: O(n) per entry -> O(n^2) per directory; fine for real trees, not tuned for huge dirs.
- */
-static int xfs_extract_name_is_lower_collision(
-    const wchar_t *src_dir,
-    const wchar_t *name )
-{
-    wchar_t          search_path[ XFS_EXTRACT_PATH_MAX ];
-    WIN32_FIND_DATAW fd;
-    HANDLE           hFind;
-    int              needs_suffix = 0;
-
-    _snwprintf( search_path, XFS_EXTRACT_PATH_MAX, L"%s\\*", src_dir );
-    hFind = FindFirstFileW( search_path, &fd );
-    if( hFind == INVALID_HANDLE_VALUE )
-    {
-        return( 0 );
-    }
-    do
-    {
-        if( _wcsicmp( fd.cFileName, name ) == 0
-         && wcscmp( fd.cFileName, name ) != 0
-         && wcscmp( name, fd.cFileName ) > 0 )
-        {
-            needs_suffix = 1;
-            break;
-        }
-    }
-    while( FindNextFileW( hFind, &fd ) );
-
-    FindClose( hFind );
-    return( needs_suffix );
-}
-
 static int xfs_extract_copy_directory(
     const wchar_t *src_dir,
     const wchar_t *dst_dir,
@@ -297,8 +258,9 @@ static int xfs_extract_copy_directory(
     wchar_t          dst_path[ XFS_EXTRACT_PATH_MAX ];
     WIN32_FIND_DATAW fd;
     HANDLE           hFind;
-    int              result         = 0;
-    int              case_sensitive = 0;
+    int              result = 0;
+    int              seq;
+    DWORD            err;
 
     if( xfs_extract_ensure_directory( dst_dir ) != 0 )
     {
@@ -306,12 +268,10 @@ static int xfs_extract_copy_directory(
                          dst_dir, GetLastError() );
         return( -1 );
     }
-    /* Prefer native case sensitivity so real names are preserved; the "__"
-     * suffix is only used where this could not be enabled.
-     */
-    case_sensitive = ( xfs_extract_enable_case_sensitive( dst_dir ) == 0 );
+    xfs_extract_enable_case_sensitive( dst_dir );
 
     _snwprintf( search_path, XFS_EXTRACT_PATH_MAX, L"%s\\*", src_dir );
+    search_path[ XFS_EXTRACT_PATH_MAX - 1 ] = L'\0';
     hFind = FindFirstFileW( search_path, &fd );
     if( hFind == INVALID_HANDLE_VALUE )
     {
@@ -324,42 +284,138 @@ static int xfs_extract_copy_directory(
         {
             continue;
         }
-        _snwprintf( src_path, XFS_EXTRACT_PATH_MAX, L"%s\\%s", src_dir, fd.cFileName );
+        _snwprintf( src_path, XFS_EXTRACT_PATH_MAX, L"%s\\%s",
+                    src_dir, fd.cFileName );
 
-        if( case_sensitive == 0
-         && xfs_extract_name_is_lower_collision( src_dir, fd.cFileName ) )
-        {
-            _snwprintf( dst_path, XFS_EXTRACT_PATH_MAX, L"%s\\%s__", dst_dir, fd.cFileName );
-            xfs_extract_log( L"Case collision: %s renamed to %s__ on destination",
-                             fd.cFileName, fd.cFileName );
-        }
-        else
-        {
-            _snwprintf( dst_path, XFS_EXTRACT_PATH_MAX, L"%s\\%s", dst_dir, fd.cFileName );
-        }
-
-        if( fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY )
-        {
-            if( xfs_extract_copy_directory( src_path, dst_path, file_count ) != 0 )
-            {
-                result = -1;
-            }
-        }
-        else if( fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT )
+        if( fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT )
         {
             xfs_extract_log( L"Error: %s is a symlink, refusing to copy",
                              src_path );
             result = -1;
+            continue;
+        }
+        _snwprintf( dst_path, XFS_EXTRACT_PATH_MAX, L"%s\\%s",
+                    dst_dir, fd.cFileName );
+
+        if( fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY )
+        {
+            int dir_ok = 1;
+
+            if( !CreateDirectoryW( dst_path, NULL ) )
+            {
+                err = GetLastError();
+                if( err == ERROR_ALREADY_EXISTS
+                 || err == ERROR_FILE_EXISTS
+                 || ( err == ERROR_ACCESS_DENIED
+                      && GetFileAttributesW( dst_path ) != INVALID_FILE_ATTRIBUTES ) )
+                {
+                    dir_ok = 0;
+                    for( seq = 1; seq <= 10; seq++ )
+                    {
+                        _snwprintf( dst_path, XFS_EXTRACT_PATH_MAX,
+                                    L"%s\\%s__%d", dst_dir, fd.cFileName, seq );
+                        if( CreateDirectoryW( dst_path, NULL ) )
+                        {
+                            xfs_extract_log(
+                                L"Case collision: %s renamed to %s__%d",
+                                fd.cFileName, fd.cFileName, seq );
+                            dir_ok = 1;
+                            break;
+                        }
+                        err = GetLastError();
+                        if( err != ERROR_ALREADY_EXISTS
+                         && err != ERROR_FILE_EXISTS
+                         && !( err == ERROR_ACCESS_DENIED
+                               && GetFileAttributesW( dst_path ) != INVALID_FILE_ATTRIBUTES ) )
+                        {
+                            xfs_extract_log(
+                                L"Error: CreateDirectory failed %s (%u)",
+                                dst_path, err );
+                            result = -1;
+                            break;
+                        }
+                    }
+                    if( dir_ok == 0 && result == 0 )
+                    {
+                        xfs_extract_log(
+                            L"Error: too many collisions for %s",
+                            fd.cFileName );
+                        result = -1;
+                    }
+                }
+                else
+                {
+                    xfs_extract_log(
+                        L"Error: CreateDirectory failed %s (%u)",
+                        dst_path, err );
+                    result = -1;
+                    dir_ok = 0;
+                }
+            }
+            if( dir_ok )
+            {
+                if( xfs_extract_copy_directory( src_path, dst_path, file_count ) != 0 )
+                {
+                    result = -1;
+                }
+            }
         }
         else
         {
-            if( !CopyFileW( src_path, dst_path, FALSE ) )
+            int copied = 0;
+
+            if( !CopyFileW( src_path, dst_path, TRUE ) )
             {
-                xfs_extract_log( L"Error: CopyFile failed %s -> %s (%u)",
-                                 src_path, dst_path, GetLastError() );
-                result = -1;
+                err = GetLastError();
+                if( err == ERROR_FILE_EXISTS
+                 || ( err == ERROR_ACCESS_DENIED
+                      && GetFileAttributesW( dst_path ) != INVALID_FILE_ATTRIBUTES ) )
+                {
+                    for( seq = 1; seq <= 10; seq++ )
+                    {
+                        _snwprintf( dst_path, XFS_EXTRACT_PATH_MAX,
+                                    L"%s\\%s__%d", dst_dir, fd.cFileName, seq );
+                        if( CopyFileW( src_path, dst_path, TRUE ) )
+                        {
+                            xfs_extract_log(
+                                L"Case collision: %s renamed to %s__%d",
+                                fd.cFileName, fd.cFileName, seq );
+                            copied = 1;
+                            break;
+                        }
+                        err = GetLastError();
+                        if( err != ERROR_FILE_EXISTS
+                         && !( err == ERROR_ACCESS_DENIED
+                               && GetFileAttributesW( dst_path ) != INVALID_FILE_ATTRIBUTES ) )
+                        {
+                            xfs_extract_log(
+                                L"Error: CopyFile failed %s -> %s (%u)",
+                                src_path, dst_path, err );
+                            result = -1;
+                            break;
+                        }
+                    }
+                    if( copied == 0 && result == 0 )
+                    {
+                        xfs_extract_log(
+                            L"Error: too many collisions for %s",
+                            fd.cFileName );
+                        result = -1;
+                    }
+                }
+                else
+                {
+                    xfs_extract_log(
+                        L"Error: CopyFile failed %s -> %s (%u)",
+                        src_path, dst_path, err );
+                    result = -1;
+                }
             }
-            else if( file_count != NULL )
+            else
+            {
+                copied = 1;
+            }
+            if( copied && file_count != NULL )
             {
                 ( *file_count )++;
             }
