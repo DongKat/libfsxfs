@@ -45,6 +45,33 @@
 
 #define XFS_EXTRACT_PATH_MAX 4096
 
+/* ------------------------------ Helpers ------------------------------ */
+
+/* _snwprintf does not null-terminate when the output is truncated, so paths
+ * are built through this wrapper instead. Returns 0 on success or -1 if the
+ * path did not fit, in which case the caller must not use the buffer.
+ */
+static int xfs_extract_build_path(
+    wchar_t       *out,
+    size_t         out_count,
+    const wchar_t *fmt,
+    ... )
+{
+    va_list args;
+    int     len;
+
+    va_start( args, fmt );
+    len = _vsnwprintf( out, out_count, fmt, args );
+    va_end( args );
+
+    if( len < 0 || (size_t) len >= out_count )
+    {
+        out[ out_count - 1 ] = L'\0';
+        return( -1 );
+    }
+    return( 0 );
+}
+
 /* ------------------------------ Logging ------------------------------ */
 
 static FILE *g_log = NULL;
@@ -56,7 +83,10 @@ static void xfs_extract_log_open(
 
     if( log_file_path != NULL && log_file_path[ 0 ] != L'\0' )
     {
-        _snwprintf( log_path, MAX_PATH, L"%s", log_file_path );
+        if( xfs_extract_build_path( log_path, MAX_PATH, L"%s", log_file_path ) != 0 )
+        {
+            return;
+        }
     }
     else
     {
@@ -117,7 +147,7 @@ static void xfs_extract_format_error_w(
                   NULL, error_code, 0, buf, buf_size, NULL );
     if( r == 0 )
     {
-        _snwprintf( buf, buf_size, L"error code %u", error_code );
+        xfs_extract_build_path( buf, buf_size, L"error code %u", error_code );
         return;
     }
     while( r > 0 && ( buf[ r - 1 ] == L'\r' || buf[ r - 1 ] == L'\n' ) )
@@ -136,17 +166,17 @@ static void xfs_extract_to_extended_path(
 
     if( wcsncmp( path, L"\\\\?\\", 4 ) == 0 )
     {
-        _snwprintf( out, out_count, L"%s", path );
+        xfs_extract_build_path( out, out_count, L"%s", path );
         return;
     }
     len = GetFullPathNameW( path, XFS_EXTRACT_PATH_MAX, full, NULL );
     if( len > 0 && len < XFS_EXTRACT_PATH_MAX )
     {
-        _snwprintf( out, out_count, L"\\\\?\\%s", full );
+        xfs_extract_build_path( out, out_count, L"\\\\?\\%s", full );
     }
     else
     {
-        _snwprintf( out, out_count, L"\\\\?\\%s", path );
+        xfs_extract_build_path( out, out_count, L"\\\\?\\%s", path );
     }
 }
 
@@ -185,8 +215,12 @@ static int xfs_extract_copy_directory(
         return( -1 );
     }
 
-    _snwprintf( search_path, XFS_EXTRACT_PATH_MAX, L"%s\\*", src_dir );
-    search_path[ XFS_EXTRACT_PATH_MAX - 1 ] = L'\0';
+    if( xfs_extract_build_path( search_path, XFS_EXTRACT_PATH_MAX,
+                                L"%s\\*", src_dir ) != 0 )
+    {
+        xfs_extract_log( L"Error: search path too long for %s", src_dir );
+        return( -1 );
+    }
     hFind = FindFirstFileW( search_path, &fd );
     if( hFind == INVALID_HANDLE_VALUE )
     {
@@ -199,9 +233,14 @@ static int xfs_extract_copy_directory(
         {
             continue;
         }
-        _snwprintf( src_path, XFS_EXTRACT_PATH_MAX, L"%s\\%s",
-                    src_dir, fd.cFileName );
-
+        if( xfs_extract_build_path( src_path, XFS_EXTRACT_PATH_MAX, L"%s\\%s",
+                                    src_dir, fd.cFileName ) != 0 )
+        {
+            xfs_extract_log( L"Error: source path too long for %s in %s",
+                             fd.cFileName, src_dir );
+            result = -1;
+            continue;
+        }
         if( fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT )
         {
             xfs_extract_log( L"Error: %s is a symlink, refusing to copy",
@@ -209,8 +248,14 @@ static int xfs_extract_copy_directory(
             result = -1;
             continue;
         }
-        _snwprintf( dst_path, XFS_EXTRACT_PATH_MAX, L"%s\\%s",
-                    dst_dir, fd.cFileName );
+        if( xfs_extract_build_path( dst_path, XFS_EXTRACT_PATH_MAX, L"%s\\%s",
+                                    dst_dir, fd.cFileName ) != 0 )
+        {
+            xfs_extract_log( L"Error: destination path too long for %s in %s",
+                             fd.cFileName, dst_dir );
+            result = -1;
+            continue;
+        }
 
         if( fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY )
         {
@@ -227,8 +272,16 @@ static int xfs_extract_copy_directory(
                     dir_ok = 0;
                     for( seq = 1; seq <= 10; seq++ )
                     {
-                        _snwprintf( dst_path, XFS_EXTRACT_PATH_MAX,
-                                    L"%s\\%s__%d", dst_dir, fd.cFileName, seq );
+                        if( xfs_extract_build_path(
+                                dst_path, XFS_EXTRACT_PATH_MAX,
+                                L"%s\\%s__%d", dst_dir, fd.cFileName, seq ) != 0 )
+                        {
+                            xfs_extract_log(
+                                L"Error: collision path too long for %s__%d",
+                                fd.cFileName, seq );
+                            result = -1;
+                            break;
+                        }
                         if( CreateDirectoryW( dst_path, NULL ) )
                         {
                             xfs_extract_log(
@@ -288,8 +341,16 @@ static int xfs_extract_copy_directory(
                 {
                     for( seq = 1; seq <= 10; seq++ )
                     {
-                        _snwprintf( dst_path, XFS_EXTRACT_PATH_MAX,
-                                    L"%s\\%s__%d", dst_dir, fd.cFileName, seq );
+                        if( xfs_extract_build_path(
+                                dst_path, XFS_EXTRACT_PATH_MAX,
+                                L"%s\\%s__%d", dst_dir, fd.cFileName, seq ) != 0 )
+                        {
+                            xfs_extract_log(
+                                L"Error: collision path too long for %s__%d",
+                                fd.cFileName, seq );
+                            result = -1;
+                            break;
+                        }
                         if( CopyFileW( src_path, dst_path, TRUE ) )
                         {
                             xfs_extract_log(
@@ -350,7 +411,11 @@ static void xfs_extract_remove_directory(
     WIN32_FIND_DATAW fd;
     HANDLE           hFind;
 
-    _snwprintf( search_path, XFS_EXTRACT_PATH_MAX, L"%s\\*", path );
+    if( xfs_extract_build_path( search_path, XFS_EXTRACT_PATH_MAX,
+                                L"%s\\*", path ) != 0 )
+    {
+        return;
+    }
     hFind = FindFirstFileW( search_path, &fd );
     if( hFind != INVALID_HANDLE_VALUE )
     {
@@ -361,7 +426,11 @@ static void xfs_extract_remove_directory(
             {
                 continue;
             }
-            _snwprintf( child_path, XFS_EXTRACT_PATH_MAX, L"%s\\%s", path, fd.cFileName );
+            if( xfs_extract_build_path( child_path, XFS_EXTRACT_PATH_MAX,
+                                        L"%s\\%s", path, fd.cFileName ) != 0 )
+            {
+                continue;
+            }
             if( fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY )
             {
                 xfs_extract_remove_directory( child_path );
@@ -427,7 +496,10 @@ static int xfs_extract_wait_for_mount_w(
     DWORD   parent_serial;
     int     i;
 
-    _snwprintf( parent, MAX_PATH, L"%s\\..", mount_point );
+    if( xfs_extract_build_path( parent, MAX_PATH, L"%s\\..", mount_point ) != 0 )
+    {
+        return( XFS_EXTRACT_WAIT_FOR_MOUNT_ERROR );
+    }
     parent_serial = xfs_extract_dir_volume_serial( parent );
     if( parent_serial == 0 )
     {
@@ -596,7 +668,13 @@ int wmain(
     /* Resolve fsxfsmount.exe path. */
     if( explicit_mount != NULL && explicit_mount[ 0 ] != L'\0' )
     {
-        _snwprintf( mount_exe, MAX_PATH, L"%s", explicit_mount );
+        if( xfs_extract_build_path( mount_exe, MAX_PATH, L"%s", explicit_mount ) != 0 )
+        {
+            fwprintf( stderr, L"Error: fsxfsmount path is too long\n" );
+            xfs_extract_log( L"Error: fsxfsmount path is too long" );
+            xfs_extract_log_close();
+            return( 1 );
+        }
     }
     else
     {
@@ -652,7 +730,13 @@ int wmain(
     xfs_extract_log( L"Temp base: %s", tmp );
 
     /* Strip trailing separator for consistent path building. */
-    _snwprintf( tmp_clean, MAX_PATH, L"%s", tmp );
+    if( xfs_extract_build_path( tmp_clean, MAX_PATH, L"%s", tmp ) != 0 )
+    {
+        fwprintf( stderr, L"Error: temp directory path is too long\n" );
+        xfs_extract_log( L"Error: temp directory path is too long" );
+        xfs_extract_log_close();
+        return( 1 );
+    }
     size_t tmp_len = wcslen( tmp_clean );
     while( tmp_len > 1
         && ( tmp_clean[ tmp_len - 1 ] == L'\\'
@@ -679,8 +763,15 @@ int wmain(
     }
 
     /* Create a unique temporary mount point. */
-    _snwprintf( mount_point, MAX_PATH, L"%s\\fsxfs_mount_%u_%u",
-                tmp_clean, GetCurrentProcessId(), GetTickCount() );
+    if( xfs_extract_build_path( mount_point, MAX_PATH, L"%s\\fsxfs_mount_%u_%u",
+                                tmp_clean, GetCurrentProcessId(),
+                                GetTickCount() ) != 0 )
+    {
+        fwprintf( stderr, L"Error: mount point path is too long\n" );
+        xfs_extract_log( L"Error: mount point path is too long" );
+        xfs_extract_log_close();
+        return( 1 );
+    }
 
     if( !CreateDirectoryW( mount_point, NULL ) )
     {
@@ -709,8 +800,15 @@ int wmain(
     }
 
     /* Launch fsxfsmount in the background. */
-    _snwprintf( cmdline, 32768, L"\"%s\" \"%s\" \"%s\"",
-                mount_exe, xfs_image, mount_point );
+    if( xfs_extract_build_path( cmdline, 32768, L"\"%s\" \"%s\" \"%s\"",
+                                mount_exe, xfs_image, mount_point ) != 0 )
+    {
+        fwprintf( stderr, L"Error: command line is too long\n" );
+        xfs_extract_log( L"Error: command line is too long" );
+        xfs_extract_remove_directory( mount_point );
+        xfs_extract_log_close();
+        return( 1 );
+    }
 
     ZeroMemory( &si, sizeof( si ) );
     si.cb = sizeof( si );
