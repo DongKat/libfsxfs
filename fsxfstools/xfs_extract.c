@@ -45,39 +45,6 @@
 
 #define XFS_EXTRACT_PATH_MAX 4096
 
-/* Per-directory NTFS case sensitivity (Win10 1803+). The Win32 API exposes no
- * wrapper for it; fsutil sets it via NtSetInformationFile with the kernel-only
- * FileCaseSensitiveInformation class, so the pieces are declared here and the
- * function is resolved from ntdll.dll at runtime.
- */
-#ifndef FILE_CS_FLAG_CASE_SENSITIVE_DIR
-#define FILE_CS_FLAG_CASE_SENSITIVE_DIR 0x00000001
-#endif
-
-#define XFS_FILE_CASE_SENSITIVE_INFORMATION_CLASS 71
-
-typedef struct _XFS_IO_STATUS_BLOCK
-{
-    union
-    {
-        LONG  Status;
-        PVOID Pointer;
-    } u;
-    ULONG_PTR Information;
-} XFS_IO_STATUS_BLOCK;
-
-typedef struct _XFS_FILE_CASE_SENSITIVE_INFORMATION
-{
-    ULONG Flags;
-} XFS_FILE_CASE_SENSITIVE_INFORMATION;
-
-typedef LONG( NTAPI *xfs_NtSetInformationFile_t )(
-    HANDLE               FileHandle,
-    XFS_IO_STATUS_BLOCK *IoStatusBlock,
-    PVOID                FileInformation,
-    ULONG                Length,
-    int                  FileInformationClass );
-
 /* ------------------------------ Logging ------------------------------ */
 
 static FILE *g_log = NULL;
@@ -197,57 +164,6 @@ static int xfs_extract_ensure_directory(
     return( -1 );
 }
 
-/* Enables per-directory case sensitivity on an NTFS directory so that names
- * differing only by case (E vs e) can coexist, matching the case-sensitive XFS
- * source. Must be called before the directory is populated.
- * Returns 0 on success or -1 on failure (feature unavailable, disabled by policy,
- * insufficient privilege, or non-NTFS destination).
- */
-static int xfs_extract_enable_case_sensitive(
-    const wchar_t *path )
-{
-    static xfs_NtSetInformationFile_t NtSetInformationFile = NULL;
-    static int                        resolved             = 0;
-
-    XFS_FILE_CASE_SENSITIVE_INFORMATION info;
-    XFS_IO_STATUS_BLOCK                 iosb;
-    HANDLE                              h;
-    LONG                                status;
-
-    if( resolved == 0 )
-    {
-        HMODULE ntdll = GetModuleHandleW( L"ntdll.dll" );
-        if( ntdll != NULL )
-        {
-            NtSetInformationFile = (xfs_NtSetInformationFile_t) GetProcAddress(
-                                       ntdll, "NtSetInformationFile" );
-        }
-        resolved = 1;
-    }
-    if( NtSetInformationFile == NULL )
-    {
-        return( -1 );
-    }
-    h = CreateFileW( path,
-                     FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES,
-                     FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                     NULL, OPEN_EXISTING,
-                     FILE_FLAG_BACKUP_SEMANTICS, NULL );
-    if( h == INVALID_HANDLE_VALUE )
-    {
-        return( -1 );
-    }
-    info.Flags = FILE_CS_FLAG_CASE_SENSITIVE_DIR;
-    ZeroMemory( &iosb, sizeof( iosb ) );
-
-    status = NtSetInformationFile( h, &iosb, &info, sizeof( info ),
-                                   XFS_FILE_CASE_SENSITIVE_INFORMATION_CLASS );
-    CloseHandle( h );
-
-    /* NT_SUCCESS: status >= 0 */
-    return( status >= 0 ? 0 : -1 );
-}
-
 static int xfs_extract_copy_directory(
     const wchar_t *src_dir,
     const wchar_t *dst_dir,
@@ -268,7 +184,6 @@ static int xfs_extract_copy_directory(
                          dst_dir, GetLastError() );
         return( -1 );
     }
-    xfs_extract_enable_case_sensitive( dst_dir );
 
     _snwprintf( search_path, XFS_EXTRACT_PATH_MAX, L"%s\\*", src_dir );
     search_path[ XFS_EXTRACT_PATH_MAX - 1 ] = L'\0';
